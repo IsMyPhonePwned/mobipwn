@@ -1,0 +1,42 @@
+[package]
+name = "mobipwn-api"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Mobile SIEM API — ingestion, rules, alerts, marketplace"
+
+[[bin]]
+name = "mobipwn-api"
+path = "src/main.rs"
+
+[features]
+default = []
+logarchive-decode = ["mobipwn-ingest/logarchive-decode"]
+
+[dependencies]
+mobipwn-core = { workspace = true }
+mobipwn-search = { workspace = true }
+mobipwn-ingest = { workspace = true }
+mobipwn-ironsift = { workspace = true }
+sha2 = { workspace = true }
+tokio = { workspace = true }
+axum = { workspace = true }
+http-body-util = "0.1"
+tower = { workspace = true }
+tower-http = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+clickhouse = { workspace = true }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+sqlx = { workspace = true }
+tempfile = "3"
+futures-util = "0.3"
+tokio-stream = "0.1"
+zip = { workspace = true }

@@ -1,0 +1,19 @@
+[package]
+name = "mobipwn-ironsift"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+mobipwn-core = { workspace = true }
+ironsift = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+clickhouse = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+anomark = { workspace = true }

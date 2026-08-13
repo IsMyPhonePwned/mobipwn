@@ -1,0 +1,15 @@
+name: Bugreport native crash (tombstone)
+description: |
+  Detects native crashes from an Android bugreport ingested with the Crash parser
+  (tombstone rows: process name, signal, optional backtrace in ext).
+
+  Prerequisites:
+  - Ingest: mobipwn-ingest bugreport -s case-001 (includes CrashParser)
+  - Re-ingest after enabling Crash if the case predates that parser
+
+  Replace source="case-001" with your ingest label. Promote lifecycle to live when ready.
+query: |
+  source="case-001" parser="Crash" data_type="android:bugreport:tombstone" process_name=* | head 200
+severity: high
+cron: "0 */6 * * *"
+lifecycle: live

@@ -1,0 +1,3 @@
+name: Android sideload hunt
+description: Package installs outside Play Store
+query: 'parser="Package" platform="android" installer=* !installer="com.android.vending" !installer="null" | stats count by bundle_id, installer | head 100'

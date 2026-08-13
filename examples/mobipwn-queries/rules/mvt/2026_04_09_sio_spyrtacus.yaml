@@ -1,0 +1,14 @@
+name: MVT Indicators - Spyrtacus / SIO (2026-04-09)
+description: |
+  Spyrtacus Android spyware IoCs (package names, C2 domains/IPs, C2 favicon SHA256)
+  from mvt-project/mvt-indicators 2026-04-09_sio_spyrtacus.
+  Likely developed in Italy by SIO S.p.A.; analyzed by Osservatorio Nessuno (sample 8.71).
+  Delivery via SMS social engineering impersonating an Italian ISP.
+  PR: https://github.com/mvt-project/mvt-indicators/pull/49 (closed; continued in #51)
+  https://github.com/mvt-project/mvt-indicators/pull/51
+  Report: https://osservatorionessuno.org/blog/2026/04/italian-spyware-maker-sio-still-developing-and-distributing-spyrtacus/
+query: |
+  platform="android" ((bundle_id="com.elysium.core" OR bundle_id="it.taog" OR bundle_id="org.util.carriersvc" OR bundle_id="sys.base.service" OR process_name=*com.elysium.core* OR process_name=*it.taog* OR process_name=*org.util.carriersvc* OR process_name=*sys.base.service*) OR (dest_ip="5.56.12.150" OR dest_ip="89.46.67.218" OR message=*5.56.12.150* OR message=*89.46.67.218*) OR (destination_domain="supporto-mobile.it" OR destination_domain="srv.servicemnt.com" OR message=*supporto-mobile.it* OR message=*srv.servicemnt.com*) OR (file_hash="ef2e1c47166fe0c5ab3bf5216baf6ad6b96f759e15ac218d1a1a3cdcc9e0994f" OR message=*ef2e1c47166fe0c5ab3bf5216baf6ad6b96f759e15ac218d1a1a3cdcc9e0994f*)) | head 500
+severity: high
+lifecycle: live
+cron: "0 */12 * * *"

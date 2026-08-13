@@ -1,0 +1,22 @@
+name: iOS sideload tools (TrollStore / AltStore / TrollDecrypt)
+description: |
+  Flags presence of common iOS sideload / persistence tools used to install unsigned
+  apps outside the App Store — notably TrollStore (com.opa334.TrollStore), TrollDecrypt
+  (com.fiore.trolldecrypt), AltStore, and Sideloadly.
+
+  Hits often appear in powerlogs App Usage / process rows and mobileinstallation
+  messages. Severity is high: these tools enable unsigned code execution and are a
+  strong compromise / jailbreak-adjacent signal on enterprise or high-risk devices.
+
+  Avoid bare *troll* wildcards (matches GameController). Prefer TrollStore / known
+  bundle IDs.
+
+  Hunt: platform="ios" (bundle_id="com.opa334.TrollStore" OR bundle_id="com.opa334.TrollStoreLite" OR bundle_id="com.fiore.trolldecrypt" OR bundle_id=*TrollStore* OR bundle_id=*trolldecrypt* OR bundle_id=*altstore* OR process_name=*TrollStore* OR process_name=*TrollDecrypt* OR process_name=*AltStore* OR message=*TrollStore* OR message=*TrollDecrypt* OR message=*com.opa334.TrollStore* OR message=*com.fiore.trolldecrypt* OR message=*AltStore* OR message=*Sideloadly*) | head 100
+query: |
+  platform="ios" (bundle_id="com.opa334.TrollStore" OR bundle_id="com.opa334.TrollStoreLite" OR bundle_id="com.fiore.trolldecrypt" OR bundle_id=*TrollStore* OR bundle_id=*trolldecrypt* OR bundle_id=*altstore* OR process_name=*TrollStore* OR process_name=*TrollDecrypt* OR process_name=*AltStore* OR message=*TrollStore* OR message=*TrollDecrypt* OR message=*com.opa334.TrollStore* OR message=*com.fiore.trolldecrypt* OR message=*AltStore* OR message=*Sideloadly*) | head 100
+severity: high
+cron: "0 */12 * * *"
+lifecycle: live
+mode: scheduled
+min_hits: 1
+max_alerts_per_run: 50

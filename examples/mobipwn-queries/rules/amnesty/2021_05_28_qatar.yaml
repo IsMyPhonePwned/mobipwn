@@ -1,0 +1,8 @@
+name: AmnestyTech Investigations - Qatar Targeted Campaign (2021-05-28)
+description: |
+  Qatar-targeted IoCs (domains, IPs). Full list at https://github.com/AmnestyTech/investigations/tree/master/2021-05-28_qatar (id: amnesty-inv-2021-05-28-qatar)
+query: |
+  (((destination_domain="youl.tube" OR dest_ip="youl.tube" OR message=*youl.tube*) OR (destination_domain="twittre.co" OR dest_ip="twittre.co" OR message=*twittre.co*) OR (destination_domain="twit-er.app" OR dest_ip="twit-er.app" OR message=*twit-er.app*)) OR data_type=*network_socket* AND (dest_ip="138.197.103.227" OR dest_ip="128.199.212.166" OR dest_ip="161.35.100.139")) | head 500
+severity: high
+lifecycle: live
+cron: "0 */12 * * *"

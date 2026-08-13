@@ -1,0 +1,8 @@
+name: AmnestyTech Investigations - Serbia NoviSpy (2024-12-16)
+description: |
+  Serbia NoviSpy IoCs (domains, SHA256, package names, package cert hashes). Full list at https://github.com/AmnestyTech/investigations/tree/master/2024-12-16_serbia_novispy (id: amnesty-inv-2024-12-16-serbia-novispy)
+query: |
+  (data_type=*network_socket* AND (dest_ip="195.178.51.251" OR dest_ip="79.101.110.108" OR dest_ip="188.93.127.34" OR dest_ip="178.220.122.57" OR dest_ip="94.140.125.174" OR dest_ip="185.86.148.174" OR dest_ip="176.223.111.131") OR (file_hash="54ee2c4f3e2396b6f92def135d68abd35d63ca7f9c304633a36f705ba4728cb7" OR file_hash="d55e492d5fce87898e065572a5553d1ac1389cd12bf3d28cabc1218cb29780af" OR file_hash="99673ce7f10e938ed73ed4a99930fbd6499983caa7a2c1b9e3f0e0bb0a5df602" OR file_hash="087fc1217c897033425fe7f1f12b913cd48918c875e99c25bdb9e1ffcf80f57e") OR ((process_name=*com.serv.services* OR bundle_id=*com.serv.services*) OR (process_name=*com.accessibilityservice* OR bundle_id=*com.accessibilityservice*) OR (process_name=*com.li.activity* OR bundle_id=*com.li.activity*) OR (process_name=*com.gu.activity* OR bundle_id=*com.gu.activity*))) | head 500
+severity: high
+lifecycle: live
+cron: "0 */12 * * *"

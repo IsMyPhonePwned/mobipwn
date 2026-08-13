@@ -1,0 +1,155 @@
+# syntax=docker/dockerfile:1
+# Shared Rust images: mobipwn-api, mobipwn-jobs, mobipwn-search.
+# Compose uses target + docker-compose.stack.yml build args (incl. HTTP_PROXY for git/cargo).
+# Manual: docker build -f docker/Dockerfile.rust --target mobipwn-api .
+
+# Transitive deps (yara-x, wasmtime from extractor libs) require rustc ≥ 1.91.
+ARG RUST_IMAGE=rust:1.91-bookworm
+FROM ${RUST_IMAGE} AS rust-base
+
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ARG BUGREPORT_EXTRACTOR_REPO=https://github.com/ismyphonepwned/bugreport-extractor-library.git
+ARG SYSDIAGNOSE_EXTRACTOR_REPO=https://github.com/ismyphonepwned/sysdiagnose-extractor-library.git
+ARG MOBIPWN_EXTRACTOR_REF
+ARG MOBIPWN_DISABLE_BUILD_PROXY
+ARG MOBIPWN_CARGO_INSECURE_SSL
+ARG CARGO_HTTP_CHECK_REVOKE
+ARG GIT_SSL_NO_VERIFY
+
+ENV HTTP_PROXY=$HTTP_PROXY \
+    HTTPS_PROXY=$HTTPS_PROXY \
+    NO_PROXY=$NO_PROXY \
+    http_proxy=$HTTP_PROXY \
+    https_proxy=$HTTPS_PROXY \
+    no_proxy=$NO_PROXY \
+    CARGO_NET_GIT_FETCH_WITH_CLI=true \
+    CARGO_HTTP_CHECK_REVOKE=${CARGO_HTTP_CHECK_REVOKE} \
+    GIT_SSL_NO_VERIFY=${GIT_SSL_NO_VERIFY}
+
+COPY docker/setup-proxy-env.sh /usr/local/bin/setup-proxy-env.sh
+RUN chmod +x /usr/local/bin/setup-proxy-env.sh \
+ && if [ "${MOBIPWN_DISABLE_BUILD_PROXY:-0}" != "1" ]; then \
+      HTTP_PROXY="${HTTP_PROXY:-}" HTTPS_PROXY="${HTTPS_PROXY:-}" NO_PROXY="${NO_PROXY:-}" \
+        /usr/local/bin/setup-proxy-env.sh; \
+    fi \
+ && (apt-get update \
+     && apt-get install -y --no-install-recommends git ca-certificates) \
+ || { rm -f /etc/apt/apt.conf.d/99-mobipwn-proxy.conf; \
+      env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy \
+        apt-get update \
+      && env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy \
+        apt-get install -y --no-install-recommends git ca-certificates; } \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY docker/clone-extractors.sh /tmp/clone-extractors.sh
+COPY docker/deps /tmp/docker-deps
+RUN chmod +x /tmp/clone-extractors.sh \
+ && if [ -f /tmp/docker-deps/bugreport-extractor-library/Cargo.toml ]; then \
+      cp -a /tmp/docker-deps/bugreport-extractor-library /bugreport-extractor-library; \
+    fi \
+ && if [ -f /tmp/docker-deps/sysdiagnose-extractor-library/Cargo.toml ]; then \
+      cp -a /tmp/docker-deps/sysdiagnose-extractor-library /sysdiagnose-extractor-library; \
+    fi \
+ && BUGREPORT_EXTRACTOR_REPO="$BUGREPORT_EXTRACTOR_REPO" \
+    SYSDIAGNOSE_EXTRACTOR_REPO="$SYSDIAGNOSE_EXTRACTOR_REPO" \
+    MOBIPWN_EXTRACTOR_REF="$MOBIPWN_EXTRACTOR_REF" \
+    HTTP_PROXY="$HTTP_PROXY" \
+    HTTPS_PROXY="$HTTPS_PROXY" \
+    /tmp/clone-extractors.sh
+
+WORKDIR /app
+COPY Cargo.lock ./
+COPY docker/Cargo.docker.toml ./Cargo.toml
+COPY mobipwn-core mobipwn-core
+COPY mobipwn-search mobipwn-search
+COPY mobipwn-ingest mobipwn-ingest
+COPY mobipwn-ironsift mobipwn-ironsift
+COPY mobipwn-api mobipwn-api
+COPY mobipwn-jobs mobipwn-jobs
+COPY migrations migrations
+COPY vendor/ironsift vendor/ironsift
+
+FROM rust-base AS rust-builder-api
+RUN cargo build --release -p mobipwn-api
+
+FROM rust-base AS rust-builder-jobs
+RUN cargo build --release -p mobipwn-jobs
+
+FROM rust-base AS rust-builder-search
+RUN cargo build --release -p mobipwn-search
+
+FROM debian:bookworm-slim AS mobipwn-api
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ARG MOBIPWN_DISABLE_BUILD_PROXY
+COPY docker/setup-proxy-env.sh /usr/local/bin/setup-proxy-env.sh
+RUN chmod +x /usr/local/bin/setup-proxy-env.sh \
+ && if [ "${MOBIPWN_DISABLE_BUILD_PROXY:-0}" != "1" ]; then \
+      HTTP_PROXY="${HTTP_PROXY:-}" HTTPS_PROXY="${HTTPS_PROXY:-}" NO_PROXY="${NO_PROXY:-}" \
+        /usr/local/bin/setup-proxy-env.sh; \
+    fi \
+ && (apt-get update \
+     && apt-get install -y --no-install-recommends ca-certificates) \
+ || { rm -f /etc/apt/apt.conf.d/99-mobipwn-proxy.conf; \
+      env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy \
+        apt-get update \
+      && env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy \
+        apt-get install -y --no-install-recommends ca-certificates; } \
+ && rm -rf /var/lib/apt/lists/*
+ENV HTTP_PROXY=${HTTP_PROXY:-} HTTPS_PROXY=${HTTPS_PROXY:-} NO_PROXY=${NO_PROXY:-} \
+    http_proxy=${HTTP_PROXY:-} https_proxy=${HTTPS_PROXY:-} no_proxy=${NO_PROXY:-}
+COPY --from=rust-builder-api /app/target/release/mobipwn-api /usr/local/bin/
+EXPOSE 3000
+CMD ["mobipwn-api"]
+
+FROM debian:bookworm-slim AS mobipwn-jobs
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ARG MOBIPWN_DISABLE_BUILD_PROXY
+COPY docker/setup-proxy-env.sh /usr/local/bin/setup-proxy-env.sh
+RUN chmod +x /usr/local/bin/setup-proxy-env.sh \
+ && if [ "${MOBIPWN_DISABLE_BUILD_PROXY:-0}" != "1" ]; then \
+      HTTP_PROXY="${HTTP_PROXY:-}" HTTPS_PROXY="${HTTPS_PROXY:-}" NO_PROXY="${NO_PROXY:-}" \
+        /usr/local/bin/setup-proxy-env.sh; \
+    fi \
+ && (apt-get update \
+     && apt-get install -y --no-install-recommends ca-certificates) \
+ || { rm -f /etc/apt/apt.conf.d/99-mobipwn-proxy.conf; \
+      env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy \
+        apt-get update \
+      && env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy \
+        apt-get install -y --no-install-recommends ca-certificates; } \
+ && rm -rf /var/lib/apt/lists/*
+ENV HTTP_PROXY=${HTTP_PROXY:-} HTTPS_PROXY=${HTTPS_PROXY:-} NO_PROXY=${NO_PROXY:-} \
+    http_proxy=${HTTP_PROXY:-} https_proxy=${HTTPS_PROXY:-} no_proxy=${NO_PROXY:-}
+COPY --from=rust-builder-jobs /app/target/release/mobipwn-jobs /usr/local/bin/
+CMD ["mobipwn-jobs"]
+
+FROM debian:bookworm-slim AS mobipwn-search
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ARG MOBIPWN_DISABLE_BUILD_PROXY
+COPY docker/setup-proxy-env.sh /usr/local/bin/setup-proxy-env.sh
+RUN chmod +x /usr/local/bin/setup-proxy-env.sh \
+ && if [ "${MOBIPWN_DISABLE_BUILD_PROXY:-0}" != "1" ]; then \
+      HTTP_PROXY="${HTTP_PROXY:-}" HTTPS_PROXY="${HTTPS_PROXY:-}" NO_PROXY="${NO_PROXY:-}" \
+        /usr/local/bin/setup-proxy-env.sh; \
+    fi \
+ && (apt-get update \
+     && apt-get install -y --no-install-recommends ca-certificates) \
+ || { rm -f /etc/apt/apt.conf.d/99-mobipwn-proxy.conf; \
+      env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy \
+        apt-get update \
+      && env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy \
+        apt-get install -y --no-install-recommends ca-certificates; } \
+ && rm -rf /var/lib/apt/lists/*
+ENV HTTP_PROXY=${HTTP_PROXY:-} HTTPS_PROXY=${HTTPS_PROXY:-} NO_PROXY=${NO_PROXY:-} \
+    http_proxy=${HTTP_PROXY:-} https_proxy=${HTTPS_PROXY:-} no_proxy=${NO_PROXY:-}
+COPY --from=rust-builder-search /app/target/release/mobipwn-search /usr/local/bin/
+EXPOSE 3002
+CMD ["mobipwn-search"]

@@ -1,0 +1,2 @@
+# Optional local copies of extractor libs for faster/offline Docker builds.
+# ./scripts/prepare-docker-deps.sh copies sibling repos when present; otherwise docker/clone-extractors.sh clones from GitHub.

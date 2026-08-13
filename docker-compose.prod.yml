@@ -1,0 +1,3 @@
+# Backward-compatible alias — use ./compose.sh or docker-compose.stack.yml directly.
+include:
+  - path: docker-compose.stack.yml

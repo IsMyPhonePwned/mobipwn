@@ -1,0 +1,35 @@
+[package]
+name = "mobipwn-search"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "mPL query language: parser, ClickHouse SQL generator, field stats"
+
+[[bin]]
+name = "mobipwn-search"
+path = "src/main.rs"
+
+[dependencies]
+mobipwn-core = { workspace = true }
+tokio = { workspace = true }
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+nom = { workspace = true }
+regex = { workspace = true }
+chrono = { workspace = true }
+clickhouse = { workspace = true }
+uuid = { workspace = true }
+sqlx = { workspace = true }
+reqwest = { workspace = true }
+hex = { workspace = true }
+
+[dev-dependencies]
+mobipwn-core = { workspace = true }

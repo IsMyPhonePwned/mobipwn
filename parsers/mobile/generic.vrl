@@ -1,0 +1,7 @@
+# Apache-2.0 — generic mobile NDJSON → MUDM-shaped payload for mobipwn ingest API
+
+.platform = string(.platform) ?? "unknown"
+.timestamp = .timestamp ?? now()
+.message = string(.message) ?? encode_json(.)
+.source = string(.source) ?? "vector"
+.source_type = string(.source_type) ?? "vector_generic"

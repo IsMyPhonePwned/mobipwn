@@ -1,0 +1,9 @@
+name: DarkSword GHOSTBLADE sample SHA256
+description: |
+  SHA256 of extracted GHOSTBLADE sample (UNC6353 Ukraine watering-hole campaign).
+  Ref: Google GTIG IOC table Mar 2026.
+query: |
+  platform="ios" file_hash="2e5a56beb63f21d9347310412ae6efb29fd3db2d3a3fc0798865a29a3c578d35" | head 50
+severity: critical
+lifecycle: live
+cron: "0 */12 * * *"

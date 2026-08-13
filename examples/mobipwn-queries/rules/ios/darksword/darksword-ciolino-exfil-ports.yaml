@@ -1,0 +1,9 @@
+name: DarkSword Ciolino C2 exfil ports
+description: |
+  DarkSword HTTPS/HTTP exfiltration ports (8882/8881) to known campaign infrastructure.
+  Ref: AntonioCiolino/DarkSword-Analysis §7 (sqwas.shapelie.com C2).
+query: |
+  platform="ios" ((remote_port=8882 OR remote_port=8881 OR local_port=8882 OR local_port=8881 OR message=*:8882* OR message=*:8881*) AND (destination_domain=*shapelie.com* OR message=*sqwas.shapelie.com* OR message=*static.cdncounter.net*)) | head 100
+severity: critical
+lifecycle: live
+cron: "0 */12 * * *"

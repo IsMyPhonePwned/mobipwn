@@ -1,0 +1,6 @@
+name: High severity mobile events
+description: Demo scheduled rule
+query: 'last 1h severity="high"'
+severity: high
+cron: "0 */6 * * *"
+lifecycle: live

@@ -1,0 +1,111 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      POSTGRES_USER: mobipwn
+      POSTGRES_PASSWORD: mobipwn
+      POSTGRES_DB: mobipwn
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-}
+      http_proxy: ${HTTP_PROXY:-}
+      https_proxy: ${HTTPS_PROXY:-}
+      no_proxy: ${NO_PROXY:-}
+    ports:
+      - "${MOBIPWN_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # Postgres 18+ expects the mount on /var/lib/postgresql (not .../data)
+      # Schema: applied by mobipwn-api on startup (sqlx migrate), not initdb scripts
+      - pgdata:/var/lib/postgresql
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: mobipwn
+      CLICKHOUSE_DB: mobipwn
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-}
+      http_proxy: ${HTTP_PROXY:-}
+      https_proxy: ${HTTPS_PROXY:-}
+      no_proxy: ${NO_PROXY:-}
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - ./clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./clickhouse/config.d/dev-low-cpu.xml:/etc/clickhouse-server/config.d/dev-low-cpu.xml:ro
+      - chdata:/var/lib/clickhouse
+
+  # API/search/web run on the host by default: `./dev.sh` (see README).
+  # Full containerized stack: `./compose.sh up` (docker-compose.stack.yml).
+  mobipwn-api:
+    image: debian:bookworm-slim
+    command: ["sleep", "infinity"]
+    profiles: ["full-stack"]
+    environment:
+      MOBIPWN_POSTGRES_URL: postgres://mobipwn:mobipwn@postgres:5432/mobipwn
+      MOBIPWN_CLICKHOUSE_URL: http://clickhouse:8123
+      MOBIPWN_CLICKHOUSE_DB: mobipwn
+      MOBIPWN_API_BIND: 0.0.0.0:3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+      - clickhouse
+
+  mobipwn-search:
+    image: debian:bookworm-slim
+    command: ["sleep", "infinity"]
+    profiles: ["full-stack"]
+    environment:
+      MOBIPWN_CLICKHOUSE_DB: mobipwn
+      MOBIPWN_SEARCH_BIND: 0.0.0.0:3002
+    ports:
+      - "3002:3002"
+    depends_on:
+      - clickhouse
+
+  vector:
+    image: timberio/vector:0.41.1-alpine
+    profiles: ["full-stack"]
+    volumes:
+      - ./vector/vector.toml:/etc/vector/vector.toml:ro
+      - ./vector/vrl:/etc/vector/vrl:ro
+    ports:
+      - "8686:8686"
+    depends_on:
+      - mobipwn-api
+
+  mobipwn-web:
+    profiles: ["full-stack"]
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    volumes:
+      - ./mobipwn-web:/app
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:3000
+      VITE_SEARCH_URL: http://localhost:3002
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-}
+      http_proxy: ${HTTP_PROXY:-}
+      https_proxy: ${HTTPS_PROXY:-}
+      no_proxy: ${NO_PROXY:-}
+      npm_config_proxy: ${HTTP_PROXY:-}
+      npm_config_https_proxy: ${HTTPS_PROXY:-}
+      npm_config_noproxy: ${NO_PROXY:-}
+
+volumes:
+  pgdata:
+  chdata:

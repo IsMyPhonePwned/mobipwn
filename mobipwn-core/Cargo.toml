@@ -1,0 +1,36 @@
+[package]
+name = "mobipwn-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Mobile SIEM core: MUDM schema, storage pools, alerts, detection"
+
+[dependencies]
+tokio = { workspace = true }
+sqlx = { workspace = true, features = ["migrate"] }
+clickhouse = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+reqwest = { workspace = true }
+sha2 = { workspace = true }
+base64 = { workspace = true }
+aes-gcm = { workspace = true }
+serde_yaml = { workspace = true }
+regex = { workspace = true }
+sysinfo = "0.38.4"
+argon2 = "0.5"
+totp-lite = "2.0"
+base32 = "0.5"
+rand = "0.8"
+urlencoding = "2.1"
+yara-x = "1.5.0"
+
+[dev-dependencies]
+serde_json = { workspace = true }

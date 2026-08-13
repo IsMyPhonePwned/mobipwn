@@ -1,0 +1,10 @@
+name: DarkSword implant JavaScript strings
+description: |
+  In-memory implant and loader strings from GHOSTKNIFE, GHOSTSABER, and GHOSTBLADE
+  (GTIG YARA rules). Includes known typos left by authors (getfilebyExtention).
+  Ref: Google GTIG Mar 2026.
+query: |
+  platform="ios" (message=*sendDeviceInfoJson* OR message=*getfilebyExtention* OR message=*send_command_to_upper_process* OR message=*ChangeStatusCheckSleepInterval* OR message=*device_info_all* OR message=*server_pub_ex* OR message=*client_pri_ds* OR message=*X-Device-UUID* OR message=*icloud_dump_*) | head 200
+severity: critical
+lifecycle: live
+cron: "0 */12 * * *"

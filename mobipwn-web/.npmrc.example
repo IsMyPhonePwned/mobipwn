@@ -1,0 +1,6 @@
+# npm proxy — optional. Prefer HTTP_PROXY / HTTPS_PROXY in repo-root .env (see docs/PROXY.md).
+# Copied to .npmrc on first ./dev.sh when missing; proxy lines are filled when HTTP_PROXY is set.
+#
+# proxy=http://proxy.corp.example:8080
+# https-proxy=http://proxy.corp.example:8080
+# noproxy=localhost,127.0.0.1

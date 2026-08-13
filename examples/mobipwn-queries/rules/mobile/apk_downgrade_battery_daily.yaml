@@ -1,0 +1,16 @@
+name: Android APK downgrade (battery daily)
+description: |
+  Flags package version decreases recorded in dumpsys batterystats daily
+  Update lines. Used by forensic extraction (Cellebrite-style APK downgrade)
+  and as a rollback indicator. Chronological comparison avoids false positives
+  from newest-first Daily sections (MVT #638 / #804).
+
+  Hunt: parser="Battery" (data_type=*battery_daily_downgrade* OR action="downgrade") | head 100
+query: |
+  parser="Battery" (data_type=*battery_daily_downgrade* OR action="downgrade") | fields timestamp, bundle_id, action, message, ext | sort -timestamp | head 100
+severity: medium
+cron: "0 */12 * * *"
+lifecycle: live
+mode: scheduled
+min_hits: 1
+max_alerts_per_run: 50

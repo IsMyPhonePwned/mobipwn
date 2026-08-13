@@ -1,0 +1,8 @@
+name: AmnestyTech Investigations - Phishing Best Practice Domains (2018-12-19)
+description: |
+  Fake account/login/phishing domains. Full list at https://github.com/AmnestyTech/investigations/tree/master/2018-12-19_best_practice (id: amnesty-inv-2018-12-19-best-practice)
+query: |
+  (((destination_domain="account-facebook.com" OR dest_ip="account-facebook.com" OR message=*account-facebook.com*) OR (destination_domain="account-privacy.com" OR dest_ip="account-privacy.com" OR message=*account-privacy.com*) OR (destination_domain="accounts-settings.com" OR dest_ip="accounts-settings.com" OR message=*accounts-settings.com*) OR (destination_domain="connect-myaccount.com" OR dest_ip="connect-myaccount.com" OR message=*connect-myaccount.com*) OR (destination_domain="inbox101-live.com" OR dest_ip="inbox101-live.com" OR message=*inbox101-live.com*) OR (destination_domain="mail02-inbox.com" OR dest_ip="mail02-inbox.com" OR message=*mail02-inbox.com*) OR (destination_domain="myaccount-logins.com" OR dest_ip="myaccount-logins.com" OR message=*myaccount-logins.com*) OR (destination_domain="myaccount.verification-approve.com" OR dest_ip="myaccount.verification-approve.com" OR message=*myaccount.verification-approve.com*) OR (destination_domain="noreply-myaccount.com" OR dest_ip="noreply-myaccount.com" OR message=*noreply-myaccount.com*) OR (destination_domain="verification-approve.com" OR dest_ip="verification-approve.com" OR message=*verification-approve.com*) OR (destination_domain="truecaller.services" OR dest_ip="truecaller.services" OR message=*truecaller.services*) OR (destination_domain="tutanota.org" OR dest_ip="tutanota.org" OR message=*tutanota.org*))) | head 500
+severity: high
+lifecycle: live
+cron: "0 */12 * * *"

@@ -1,0 +1,8 @@
+name: AmnestyTech Investigations - NSO Morocco (2019-10-10)
+description: |
+  NSO-related Morocco campaign domains. Full list at https://github.com/AmnestyTech/investigations/tree/master/2019-10-10_nso_morocco (id: amnesty-inv-2019-10-10-nso-morocco)
+query: |
+  (((destination_domain="stopsms.biz" OR dest_ip="stopsms.biz" OR message=*stopsms.biz*) OR (destination_domain="revolution-news.co" OR dest_ip="revolution-news.co" OR message=*revolution-news.co*) OR (destination_domain="videosdownload.co" OR dest_ip="videosdownload.co" OR message=*videosdownload.co*) OR (destination_domain="infospress.com" OR dest_ip="infospress.com" OR message=*infospress.com*) OR (destination_domain="business-today.info" OR dest_ip="business-today.info" OR message=*business-today.info*) OR (destination_domain="hmizat.co" OR dest_ip="hmizat.co" OR message=*hmizat.co*) OR (destination_domain="free247downloads.com" OR dest_ip="free247downloads.com" OR message=*free247downloads.com*) OR (destination_domain="bun54l2b67.get1tn0w.free247downloads.com" OR dest_ip="bun54l2b67.get1tn0w.free247downloads.com" OR message=*bun54l2b67.get1tn0w.free247downloads.com*))) | head 500
+severity: high
+lifecycle: live
+cron: "0 */12 * * *"

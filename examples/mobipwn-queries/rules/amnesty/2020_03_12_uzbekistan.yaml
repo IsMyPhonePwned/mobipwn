@@ -1,0 +1,8 @@
+name: AmnestyTech Investigations - Uzbekistan Targeted Campaign (2020-03-12)
+description: |
+  Uzbekistan-targeted IoCs (domains, IPs, samples). Full list at https://github.com/AmnestyTech/investigations/tree/master/2020-03-12_uzbekistan (id: amnesty-inv-2020-03-12-uzbekistan)
+query: |
+  (((destination_domain="acccountsgoog1e.com" OR dest_ip="acccountsgoog1e.com" OR message=*acccountsgoog1e.com*) OR (destination_domain="accountsgoog1e.com" OR dest_ip="accountsgoog1e.com" OR message=*accountsgoog1e.com*) OR (destination_domain="auth-google.site" OR dest_ip="auth-google.site" OR message=*auth-google.site*) OR (destination_domain="navyfedera1.org" OR dest_ip="navyfedera1.org" OR message=*navyfedera1.org*) OR (destination_domain="mynavyfedera1.org" OR dest_ip="mynavyfedera1.org" OR message=*mynavyfedera1.org*) OR (destination_domain="yandex-account-security.com" OR dest_ip="yandex-account-security.com" OR message=*yandex-account-security.com*) OR (destination_domain="gmail-warning.top" OR dest_ip="gmail-warning.top" OR message=*gmail-warning.top*) OR (destination_domain="google-activity.pw" OR dest_ip="google-activity.pw" OR message=*google-activity.pw*)) OR (file_hash="279c70f2da2c361b62353bdaa388372adc14929b3be83571b1347d890fd6279c" OR file_hash="902c5f46ac101b6f30032d4c5c86ecec115add3605fb0d66057130b6e11c57e6" OR file_hash="ba1990b5e38191512718180d0de1ad2123e18330449b8c12877c4db60aeb05e4")) | head 500
+severity: high
+lifecycle: live
+cron: "0 */12 * * *"

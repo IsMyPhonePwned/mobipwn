@@ -1,0 +1,11 @@
+name: DarkSword GHOSTBLADE filesystem artifacts
+description: |
+  Post-exploitation file artifacts from GHOSTBLADE dataminer (WiFi password dumps,
+  keychain copies, iCloud dump staging). Not backed up — requires on-device or full
+  filesystem capture. Ref: GTIG YARA G_Datamine_GHOSTBLADE_1, iVerify IOCs,
+  AntonioCiolino/DarkSword-Analysis §7 (keychain_copy, keybag_copy, PostLogs.txt).
+query: |
+  platform="ios" ((file_path=*wifi_passwords* OR message=*wifi_passwords* OR action=*wifi_passwords*) OR (file_path=*wifi_passwords_securityd.txt* OR message=*wifi_passwords_securityd.txt*) OR (file_path=*icloud_dump* OR message=*icloud_dump*) OR (file_path=*keychain_dump.txt* OR message=*keychain_dump.txt*) OR (file_path=*/private/var/tmp/keychain-2.db* OR message=*/private/var/tmp/keychain-2.db*) OR (file_path=*keychain_copy* OR message=*keychain_copy*) OR (file_path=*keybag_copy* OR message=*keybag_copy*) OR (file_path=*PostLogs.txt* OR message=*PostLogs.txt*) OR (file_path=*persona_keychains.kb* OR message=*persona_keychains.kb*) OR (file_path=*usersession_keychains.kb* OR message=*usersession_keychains.kb*) OR (file_path=*installed_apps.txt* OR message=*installed_apps.txt*)) | head 200
+severity: critical
+lifecycle: live
+cron: "0 */12 * * *"

@@ -1,0 +1,10 @@
+name: DarkSword unified log exploit tags
+description: |
+  High-confidence unified-log markers from DarkSword chain execution in mediaplaybackd
+  and related processes (DarkSword-WIFI-DUMP, MIG_FILTER_BYPASS, TASKROP, etc.).
+  Requires logarchive decode at ingest (./dev.sh --logarchive-decode). Ref: iVerify.
+query: |
+  platform="ios" parser="logarchive" action="logarchive_event" (message=*DarkSword-WIFI-DUMP* OR message=*MIG_FILTER_BYPASS* OR message=*DRIVER-NEWTHREAD* OR message=*TASKROP* OR message=*Hello from* OR message=*target corrupted* OR message=*Running on non-A18*) | head 100
+severity: critical
+lifecycle: live
+cron: "0 */12 * * *"

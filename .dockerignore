@@ -1,0 +1,9 @@
+target/
+.dev/
+.git/
+mobipwn-web/node_modules/
+mobipwn-web/dist/
+**/*.rs.bk
+**/.DS_Store
+*.md
+!migrations/

@@ -1,0 +1,53 @@
+//! Rust WebADB - ADB (Android Debug Bridge) implementation for WebUSB in Rust
+//!
+//! This library provides a WebAssembly-compatible implementation of the Android Debug Bridge
+//! protocol, allowing web applications to communicate with Android devices via WebUSB.
+//!
+//! # Example
+//!
+//! ```javascript
+//! import init, { Adb } from './pkg/webadb_rs.js';
+//!
+//! async function main() {
+//!     await init();
+//!     
+//!     const adb = new Adb();
+//!     
+//!     // Connect to device (will prompt user to select device)
+//!     const deviceInfo = await adb.connect();
+//!     console.log('Connected to:', deviceInfo);
+//!     
+//!     // Execute shell command
+//!     const output = await adb.shell('ls /sdcard');
+//!     console.log('Output:', output);
+//!     
+//!     // Get device properties
+//!     const props = await adb.get_properties();
+//!     console.log('Properties:', props);
+//!     
+//!     // Disconnect
+//!     await adb.disconnect();
+//! }
+//! ```
+
+pub mod auth;
+#[cfg(feature = "bugreport-analysis")]
+pub mod parsers;
+#[cfg(feature = "webusb")]
+pub mod client;
+pub mod protocol;
+pub mod sync;
+#[cfg(feature = "webusb")]
+pub mod transport;
+#[cfg(feature = "webusb")]
+pub mod wasm;
+
+// Re-export main types
+pub use auth::AdbKeyPair;
+#[cfg(feature = "webusb")]
+pub use client::AdbClient;
+pub use protocol::{AdbError, Command, ConnectionState, Message};
+#[cfg(feature = "webusb")]
+pub use transport::{WebUsbTransport, DeviceInfo};
+#[cfg(feature = "webusb")]
+pub use wasm::Adb;

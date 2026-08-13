@@ -1,0 +1,5 @@
+name: Android crash hunt
+description: |
+  Explore Crash parser rows after bugreport ingest (tombstones, ANR, backtrace frames).
+  Deploy detection rules: rules/bugreport_native_crash.yaml, rules/bugreport_anr.yaml
+query: 'source="case-001" parser="Crash" | stats count by data_type | head 20'

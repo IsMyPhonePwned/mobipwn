@@ -1,0 +1,27 @@
+[package]
+name = "mobipwn-jobs"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Scheduled detection runner and marketplace sync"
+
+[[bin]]
+name = "mobipwn-jobs"
+path = "src/main.rs"
+
+[dependencies]
+mobipwn-core = { workspace = true }
+mobipwn-search = { workspace = true }
+mobipwn-ironsift = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+tokio-cron-scheduler = { workspace = true }
+clickhouse = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+sqlx = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }

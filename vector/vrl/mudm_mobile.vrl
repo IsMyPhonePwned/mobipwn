@@ -1,0 +1,22 @@
+# Normalize arbitrary mobile/endpoint logs into mobipwn ingest JSONL batch.
+# Each incoming event becomes one line in the `jsonl` field.
+
+.platform = to_string(.platform) ?? "endpoint"
+.message = to_string(.message) ?? to_string(.) ?? ""
+.datetime = to_string(.timestamp) ?? format_timestamp!(now(), format: "%+")
+
+.line = encode_json({
+  "message": .message,
+  "datetime": .datetime,
+  "platform": .platform,
+  "data_type": to_string(.data_type) ?? "vector",
+  "parser": to_string(.parser) ?? "vector",
+  "bundle_id": to_string(.bundle_id) ?? to_string(.package) ?? "",
+  "src_ip": to_string(.src_ip) ?? "",
+})
+
+. = {
+  "platform": .platform,
+  "source": to_string(.source) ?? "vector-http",
+  "jsonl": .line,
+}

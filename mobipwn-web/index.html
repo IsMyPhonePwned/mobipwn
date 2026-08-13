@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("mobipwn-theme");
+          var theme =
+            t === "light" || t === "dark" || t === "focus" || t === "matrix" ? t : "dark";
+          document.documentElement.classList.add(theme);
+        } catch (e) {
+          document.documentElement.classList.add("dark");
+        }
+        try {
+          var l = localStorage.getItem("mobipwn-locale");
+          document.documentElement.lang =
+            l === "zh" ? "zh-Hans" : l === "fr" ? "fr" : "en";
+        } catch (e) {
+          document.documentElement.lang = "en";
+        }
+        // react-draggable / react-grid-layout read process.env in the browser
+        globalThis.process = globalThis.process || { env: {} };
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MobiPwn</title>
+    <link rel="icon" href="/logo.png" type="image/png" />
+    <meta name="description" content="MobiPwn — mobile SIEM and threat analytics" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

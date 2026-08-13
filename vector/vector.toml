@@ -1,0 +1,31 @@
+# Production Vector — HTTP NDJSON, syslog, file tail → mobipwn API
+
+[sources.http_ingest]
+type = "http_server"
+address = "0.0.0.0:8686"
+encoding = "ndjson"
+path = "/ingest"
+
+[sources.syslog]
+type = "syslog"
+address = "0.0.0.0:514"
+mode = "udp"
+
+[sources.jsonl_files]
+type = "file"
+include = ["/var/log/mobipwn/*.jsonl"]
+read_from = "beginning"
+
+[transforms.mudm_vrl]
+type = "remap"
+inputs = ["http_ingest", "syslog", "jsonl_files"]
+file = "/etc/vector/vrl/mudm_mobile.vrl"
+
+[sinks.mobipwn_api]
+type = "http"
+inputs = ["mudm_vrl"]
+uri = "${MOBIPWN_API_URL:-http://127.0.0.1:3000}/v1/ingest/jsonl"
+method = "post"
+encoding.codec = "json"
+request.headers.Content-Type = "application/json"
+batch.max_events = 500

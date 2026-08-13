@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<!-- Dev: disable heavy system log tables. Run scripts/ch-prune-system-logs.sh once to drop existing bloat. -->
+<clickhouse>
+    <text_log remove="1"/>
+    <asynchronous_metric_log remove="1"/>
+    <processors_profile_log remove="1"/>
+    <trace_log remove="1"/>
+    <query_log remove="1"/>
+    <metric_log remove="1"/>
+    <part_log remove="1"/>
+    <asynchronous_metrics_update_period_s>30</asynchronous_metrics_update_period_s>
+</clickhouse>

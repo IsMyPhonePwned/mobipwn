@@ -1,0 +1,20 @@
+{
+  "name": "mobipwn-webadb",
+  "type": "module",
+  "collaborators": [
+    "IsMyPhonePwned"
+  ],
+  "description": "WebUSB ADB client for browser-based bugreport collection (vendored from webadb-rs)",
+  "version": "0.1.0",
+  "license": "MIT",
+  "files": [
+    "webadb_rs_bg.wasm",
+    "webadb_rs.js",
+    "webadb_rs.d.ts"
+  ],
+  "main": "webadb_rs.js",
+  "types": "webadb_rs.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

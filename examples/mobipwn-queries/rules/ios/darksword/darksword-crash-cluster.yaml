@@ -1,0 +1,17 @@
+name: DarkSword exploit crash cluster
+description: |
+  Crash reports consistent with DarkSword chain stages — not isolated process names.
+  High confidence: EXC_ARM_DA_ALIGN at PC 0x0000000000000201 in post-exploit injection
+  targets (configd, UserEventAgent, wifid, securityd). Also mediaplaybackd kernel-stage
+  EXC_ARM_DA_ALIGN and EXC_GUARD in injection targets or WebKit sandbox-escape processes.
+  Ref iVerify, GTIG, AntonioCiolino/DarkSword-Analysis §5.4.
+query: |
+  platform="ios" parser="crashlogs" (
+    (message=*EXC_ARM_DA_ALIGN* AND message=*0x0000000000000201* AND (message=*configd* OR message=*UserEventAgent* OR message=*wifid* OR message=*securityd*))
+    OR (message=*mediaplaybackd* AND message=*EXC_ARM_DA_ALIGN*)
+    OR (message=*EXC_GUARD* AND (message=*configd* OR message=*UserEventAgent* OR message=*wifid* OR message=*securityd*))
+    OR (message=*EXC_GUARD* AND (message=*WebKit.WebContent* OR message=*WebKit.GPU*))
+  ) | head 200
+severity: high
+lifecycle: live
+cron: "0 */12 * * *"

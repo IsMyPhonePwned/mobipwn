@@ -1,0 +1,19 @@
+name: DarkSword Ciolino behavioral indicators
+description: |
+  Post-exploitation behaviors from reconstructed DarkSword chain — requires correlated
+  indicators, not isolated syscall or sandbox strings. Covers WebContent framework load
+  abuse (TextToSpeech / PerfPowerServicesReader), ICMPv6 kernel R/W in mediaplaybackd,
+  cross-process JS injection primitives, JSC in system daemons, and AirPort keychain
+  queries from wifid/securityd. Ref AntonioCiolino/DarkSword-Analysis §3–§7.
+query: |
+  platform="ios" (
+    (message=*TextToSpeech.framework* AND message=*WebKit.WebContent*)
+    OR (message=*PerfPowerServicesReader* AND message=*WebKit.WebContent*)
+    OR (message=*ICMP6_FILTER* AND message=*IPPROTO_ICMPV6* AND message=*mediaplaybackd*)
+    OR (message=*JSObjectMakeArrayBufferWithBytesNoCopy* AND message=*thread_set_exception_ports* AND message=*pthread_create_suspended_np*)
+    OR (message=*SecItemCopyMatching* AND message=*AirPort* AND (message=*wifid* OR message=*securityd*))
+    OR (message=*JavaScriptCore* AND (message=*configd* OR message=*wifid* OR message=*securityd* OR message=*UserEventAgent* OR message=*SpringBoard*))
+  ) | head 100
+severity: high
+lifecycle: live
+cron: "0 */12 * * *"

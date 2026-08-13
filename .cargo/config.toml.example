@@ -1,0 +1,11 @@
+# Example Cargo config for corporate TLS interception.
+# ./dev.sh --insecure-cargo-ssl writes .cargo/config.toml automatically (gitignored).
+# Or copy relevant lines to ~/.cargo/config.toml for all projects.
+
+[net]
+git-fetch-with-cli = true
+
+[http]
+check-revoke = false
+multiplexing = false
+# cainfo = "/path/to/corporate-ca.pem"

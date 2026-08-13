@@ -1,0 +1,17 @@
+name: Package installed outside default installer
+description: |
+  Flags Android apps in bugreport package metadata installed by a third-party
+  package — not Play Store, system installer UI, or common OEM/MDM updaters.
+
+  Excludes self-updates (installer equals bundle_id), apps under /system/, and
+  known fleet updaters (Facebook system installer, Samsung Update Center, etc.).
+
+  Hunt: parser="Package" platform="android" data_type=*package_metadata* installer=* installer NOT IN ("com.android.vending", "com.google.android.packageinstaller", "com.android.packageinstaller", "null", "com.facebook.system", "com.samsung.android.app.updatecenter", "com.sec.android.app.samsungapps", "com.android.managedprovisioning", "android") !file_path=*/system/* installer!=bundle_id | head 100
+query: |
+  parser="Package" platform="android" data_type=*package_metadata* installer=* installer NOT IN ("com.android.vending", "com.google.android.packageinstaller", "com.android.packageinstaller", "null", "com.facebook.system", "com.samsung.android.app.updatecenter", "com.sec.android.app.samsungapps", "com.android.managedprovisioning", "android") !file_path=*/system/* installer!=bundle_id | head 100
+severity: high
+cron: "0 */12 * * *"
+lifecycle: live
+mode: scheduled
+min_hits: 1
+max_alerts_per_run: 50

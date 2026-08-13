@@ -1,0 +1,21 @@
+/** MUDM / mobile hunt fields for mPL syntax highlighting */
+export const MUDM_COLUMNS = [
+  "timestamp",
+  "platform",
+  "parser",
+  "source",
+  "ingest_time",
+  "source_type",
+  "data_type",
+  "severity",
+  "message",
+  "bundle_id",
+  "device_id",
+  "process_name",
+  "src_ip",
+  "dst_ip",
+  "file_hash",
+  "host",
+  "user",
+  "event_type",
+] as const;

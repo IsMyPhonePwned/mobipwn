@@ -1,0 +1,344 @@
+<!-- Connection status -->
+<div id="status" class="status disconnected" role="status">Status: Disconnected</div>
+
+<div id="adb-workspace">
+  <div class="controls btn-row">
+    <button type="button" id="connectBtn" class="btn btn-primary" disabled>Connect to Device</button>
+    <button type="button" id="disconnectBtn" class="btn" disabled>Disconnect</button>
+    <button
+      type="button"
+      id="resetQueueBtn"
+      class="btn btn-danger"
+      onclick="resetQueue()"
+      style="display: none"
+      title="Reset stuck queue"
+    >
+      Reset Queue
+    </button>
+  </div>
+
+  <section class="section section--muted">
+    <details class="diagnostics-details">
+      <summary>
+        Connection diagnostics
+        <span class="diagnostics-summary-hint">Optional — only if something seems stuck</span>
+      </summary>
+      <div class="diagnostics-inner">
+        <p class="hint">
+          ADB stream count, a quick <code>echo ping</code> check, and stale-stream cleanup. Not needed for
+          normal use.
+        </p>
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="stat-card__label">Active Streams</div>
+            <div class="stat-card__value" id="streamCount">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__label">Connection Health</div>
+            <div class="stat-card__value stat-card__value--sm" id="healthStatus">Unknown</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__label">Stale Cleaned</div>
+            <div class="stat-card__value stat-card__value--warn" id="cleanedCount">0</div>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button type="button" id="healthCheckBtn" class="btn" disabled>Check Health</button>
+          <button type="button" id="cleanupStreamsBtn" class="btn" disabled>Cleanup Stale</button>
+          <button type="button" id="refreshDiagnosticsBtn" class="btn" disabled>Refresh</button>
+        </div>
+        <div id="diagnosticsLog" class="diagnostics-log" style="display: none"></div>
+      </div>
+    </details>
+  </section>
+
+  <section class="section terminal-section">
+    <h2>Shell Terminal</h2>
+    <p class="hint">Execute commands on the Android device.</p>
+
+    <div class="chip-row">
+      <button type="button" id="shellCmdLs" class="chip-btn">ls -la</button>
+      <button type="button" id="shellCmdPwd" class="chip-btn">pwd</button>
+      <button type="button" id="shellCmdDf" class="chip-btn">df -h</button>
+      <button type="button" id="shellCmdPs" class="chip-btn">ps</button>
+      <button type="button" id="shellCmdVersion" class="chip-btn">version</button>
+      <button type="button" id="shellCmdUname" class="chip-btn">uname</button>
+      <button type="button" id="shellCmdClear" class="chip-btn chip-btn--danger">clear</button>
+    </div>
+
+    <div id="terminalOutput" class="terminal-output">
+      $ <span class="terminal-muted">Connected. Type a command or use quick buttons above.</span>
+    </div>
+
+    <div class="shell-input-row">
+      <span class="shell-prompt" aria-hidden="true">$</span>
+      <input
+        type="text"
+        id="shellInput"
+        class="shell-input"
+        placeholder="Enter command (e.g., ls -la, df -h, ps)"
+        disabled
+      />
+      <button type="button" id="shellExecuteBtn" class="btn btn-primary" disabled>Execute</button>
+    </div>
+
+    <p class="hint hint--tight">Tips: ↑/↓ for history · Ctrl+C to stop · Ctrl+L to clear</p>
+  </section>
+
+  <section class="section">
+    <h2>File Manager</h2>
+    <p class="hint">Browse, upload, download, and manage files on the device.</p>
+
+    <div class="toolbar">
+      <div class="toolbar__nav">
+        <button type="button" id="fileNavBack" class="btn btn-ghost" disabled>← Back</button>
+        <button type="button" id="fileNavUp" class="btn btn-ghost" disabled>↑ Up</button>
+        <div id="breadcrumbNav" class="breadcrumb mono">
+          <span class="muted">Loading…</span>
+        </div>
+        <button type="button" id="fileRefresh" class="btn btn-ghost" disabled>Refresh</button>
+      </div>
+
+      <div class="chip-row">
+        <button type="button" class="quickPath chip-btn" data-path="/sdcard" disabled>SD Card</button>
+        <button type="button" class="quickPath chip-btn" data-path="/sdcard/Download" disabled>
+          Downloads
+        </button>
+        <button type="button" class="quickPath chip-btn" data-path="/sdcard/DCIM" disabled>Camera</button>
+        <button type="button" class="quickPath chip-btn" data-path="/data/local/tmp" disabled>Tmp</button>
+        <button type="button" class="quickPath chip-btn" data-path="/" disabled>Root</button>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" id="fileUploadBtn" class="btn" disabled>Upload Files</button>
+        <input type="file" id="fileUploadInput" multiple hidden />
+        <button type="button" id="fileNewFolderBtn" class="btn" disabled>New Folder</button>
+        <button type="button" id="fileSelectAllBtn" class="btn btn-ghost" disabled>Select All</button>
+        <button type="button" id="fileDeselectAllBtn" class="btn btn-ghost" disabled>Deselect All</button>
+      </div>
+    </div>
+
+    <div class="file-table-wrap">
+      <div id="fileListContainer" class="file-table-scroll">
+        <table id="fileTable" class="file-table">
+          <thead>
+            <tr>
+              <th data-sort="name">
+                <input type="checkbox" id="selectAllCheckbox" aria-label="Select all" />
+                Name <span id="sortNameIndicator">▼</span>
+              </th>
+              <th data-sort="size" class="col-size">
+                Size <span id="sortSizeIndicator"></span>
+              </th>
+              <th class="col-type">Type</th>
+              <th class="col-actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="fileTableBody">
+            <tr>
+              <td colspan="4" class="empty-cell">Connect to a device to browse files</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="fileDropZone" class="file-drop-zone">
+      <div class="file-drop-zone__inner">
+        <div class="file-drop-zone__title">Drop files here to upload</div>
+        <div class="file-drop-zone__path" id="dropZonePath"></div>
+      </div>
+    </div>
+
+    <div id="fileContextMenu" class="context-menu" style="display: none">
+      <div class="context-menu-item" data-action="open">Open</div>
+      <div class="context-menu-item" data-action="download">Download</div>
+      <div class="context-menu-item" data-action="rename">Rename</div>
+      <div class="context-menu-item context-menu-item--danger" data-action="delete">Delete</div>
+      <div class="context-menu-item" data-action="copypath">Copy Path</div>
+    </div>
+  </section>
+
+  <div id="fileManagerModals">
+    <div id="renameModal" class="modal" style="display: none">
+      <div class="modal__panel">
+        <h3>Rename</h3>
+        <input type="text" id="renameInput" class="modal__input" placeholder="New name" />
+        <div class="modal__actions">
+          <button type="button" class="btn" onclick="closeRenameModal()">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="confirmRename()">Rename</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="newFolderModal" class="modal" style="display: none">
+      <div class="modal__panel">
+        <h3>Create New Folder</h3>
+        <input type="text" id="newFolderInput" class="modal__input" placeholder="Folder name" />
+        <div class="modal__actions">
+          <button type="button" class="btn" onclick="closeNewFolderModal()">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="confirmNewFolder()">Create</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="deleteConfirmModal" class="modal" style="display: none">
+      <div class="modal__panel">
+        <h3 class="modal__title--danger">Confirm Delete</h3>
+        <p id="deleteConfirmText">Are you sure you want to delete this item?</p>
+        <div class="warning">
+          <strong>Warning:</strong> This action cannot be undone.
+        </div>
+        <div class="modal__actions">
+          <button type="button" class="btn" onclick="closeDeleteConfirmModal()">Cancel</button>
+          <button type="button" class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="uploadProgressModal" class="modal" style="display: none">
+      <div class="modal__panel">
+        <h3>Uploading Files</h3>
+        <div id="uploadFileName" class="upload-filename">file.txt</div>
+        <div class="progress-track">
+          <div id="uploadProgressBar" class="progress-fill progress-fill--accent"></div>
+        </div>
+        <div id="uploadProgressText" class="progress-label">0%</div>
+        <div id="uploadStatus" class="progress-status"></div>
+      </div>
+    </div>
+  </div>
+
+  <section class="section">
+    <h2>Bug Reports</h2>
+    <p class="hint">Access device diagnostic reports for troubleshooting.</p>
+
+    <div class="warning">
+      <strong>Tip:</strong> Check “Available Bugreports” below first to download existing reports instantly.
+      Generating a new report takes 5–10 minutes (generation + transfer).
+    </div>
+
+    <div class="btn-row">
+      <button type="button" id="bugreportLiteBtn" class="btn btn-primary" disabled>
+        Generate Lite Report (~30s)
+      </button>
+      <button type="button" id="bugreportFullBtn" class="btn" disabled>
+        Generate Full Report (~5–10min)
+      </button>
+    </div>
+
+    <div id="bugreportProgress" class="progress">
+      <div id="bugreportProgressBar" class="progress-bar">0%</div>
+    </div>
+
+    <div id="bugreportFullDetail" class="bugreport-full-detail" aria-live="polite" aria-atomic="true">
+      <h4>Full bugreport running</h4>
+      <p id="bugreportElapsed" class="bugreport-elapsed">Elapsed: 0:00</p>
+      <ul>
+        <li>
+          The phone is collecting logs and system dumps (<code>bugreportz</code>). Busy devices often need
+          <strong>about 5–15 minutes</strong> before data is ready.
+        </li>
+        <li>
+          Keep USB connected; avoid running desktop <code>adb</code> or Android Studio against the same
+          device while this runs.
+        </li>
+        <li>
+          Leaving this browser tab visible can reduce throttling; try not to put the phone in deep sleep.
+        </li>
+        <li>
+          When the device finishes, the ZIP is transferred over WebUSB — large reports add more minutes.
+        </li>
+        <li>
+          The progress bar is only a rough guide; <strong>completion</strong> is when you see the success
+          message and download size below.
+        </li>
+      </ul>
+    </div>
+
+    <div id="bugreportInfo" class="file-info">
+      <h3>Report Generated</h3>
+      <p><strong>Size:</strong> <span id="reportSize">-</span></p>
+      <p><strong>Format:</strong> <span id="reportFormat">-</span></p>
+      <div class="btn-row">
+        <button type="button" id="downloadReportBtn" class="btn btn-primary download-btn">
+          Download Report
+        </button>
+        <button type="button" id="viewReportBtn" class="btn">View Report</button>
+      </div>
+    </div>
+
+    <div id="bugreportOutput" class="output" style="display: none"></div>
+
+    <div class="subsection">
+      <h3>Available Bugreports on Device</h3>
+      <p class="hint">
+        Fastest option: download previously generated bugreports. If you recently ran
+        <code>adb bugreportz</code>, it will appear here.
+      </p>
+      <button type="button" id="listBugreportsBtn" class="btn" disabled>List Available Bugreports</button>
+      <div id="bugreportsList" class="output" style="display: none"></div>
+
+      <div id="downloadDebug" class="download-debug" style="display: none">
+        <div class="download-debug__head">
+          <strong>Download Progress</strong>
+          <span id="downloadStatus" class="muted">Idle</span>
+        </div>
+        <div class="progress-track">
+          <div id="downloadProgressBar" class="progress-fill progress-fill--success"></div>
+        </div>
+        <div class="download-debug__meta">
+          <div><span class="muted">File</span> <span id="debugFile">-</span></div>
+          <div><span class="muted">Size</span> <span id="debugSize">-</span></div>
+          <div><span class="muted">Elapsed</span> <span id="debugTime">0s</span></div>
+          <div><span class="muted">Speed</span> <span id="debugSpeed">-</span></div>
+        </div>
+        <div class="download-debug__log-wrap">
+          <div class="muted text-xs">Console Log</div>
+          <div id="debugLog" class="download-debug__log"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Logcat</h2>
+    <p class="hint">View device logs for debugging and troubleshooting.</p>
+
+    <div class="logcat-controls">
+      <input type="number" id="logcatLines" value="100" min="10" max="10000" placeholder="Lines" />
+      <button type="button" id="logcatBtn" class="btn" disabled>Get Logcat</button>
+      <button type="button" id="logcatClearBtn" class="btn btn-ghost" disabled>Clear Logcat</button>
+      <button type="button" id="downloadLogBtn" class="btn download-btn" disabled>Download Log</button>
+    </div>
+
+    <div id="logcatOutput" class="output"></div>
+  </section>
+
+  <section class="section">
+    <h2>File Browser</h2>
+    <p class="hint">Browse and download files from a path.</p>
+
+    <div class="logcat-controls">
+      <input type="text" id="filePath" value="/sdcard" placeholder="Path" />
+      <button type="button" id="listBtn" class="btn" disabled>List Directory</button>
+      <button type="button" id="statBtn" class="btn" disabled>Get File Info</button>
+    </div>
+
+    <div id="fileList" class="file-list" style="display: none"></div>
+    <div id="fileStatOutput" class="output" style="display: none"></div>
+  </section>
+
+  <section class="section">
+    <h2>Advanced Operations</h2>
+    <p class="hint">Additional diagnostic and data collection tools.</p>
+
+    <div class="btn-row">
+      <button type="button" id="screenshotBtn" class="btn" disabled>Capture Screenshot</button>
+      <button type="button" id="dumpStateBtn" class="btn" disabled>Dump System State</button>
+      <button type="button" id="packageListBtn" class="btn" disabled>List All Packages</button>
+    </div>
+
+    <div id="advancedOutput" class="output"></div>
+  </section>
+</div>

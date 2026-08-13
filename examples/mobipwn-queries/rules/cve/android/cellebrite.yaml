@@ -1,0 +1,8 @@
+name: Cellebrite on Android
+description: |
+  Detects Cellebrite Used Against Jordanian Civil Society => (https://citizenlab.ca/research/from-protest-to-peril-cellebrite-used-against-jordanian-civil-society/) (id: 426e58ac-4a36-4dcc-9d98-4f621b1a89d0)
+query: |
+  ((bundle_id="com.client.appA")) | head 500
+severity: critical
+lifecycle: live
+cron: "0 */12 * * *"

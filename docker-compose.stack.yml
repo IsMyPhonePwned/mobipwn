@@ -1,0 +1,205 @@
+# Full MobiPwn stack — API, jobs, web UI, Postgres, ClickHouse.
+# Start: ./compose.sh up   (Docker or Podman)
+# Dev on host (Rust + Vite): ./dev.sh  + docker-compose.yml (DBs only)
+
+name: mobipwn
+
+x-proxy-env: &proxy-env
+  HTTP_PROXY: ${HTTP_PROXY:-}
+  HTTPS_PROXY: ${HTTPS_PROXY:-}
+  NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres,clickhouse,mobipwn-api,mobipwn-jobs,mobipwn-web}
+  http_proxy: ${HTTP_PROXY:-}
+  https_proxy: ${HTTPS_PROXY:-}
+  no_proxy: ${NO_PROXY:-localhost,127.0.0.1,postgres,clickhouse,mobipwn-api,mobipwn-jobs,mobipwn-web}
+
+x-mobipwn-env: &mobipwn-env
+  MOBIPWN_CLICKHOUSE_USER: ${MOBIPWN_CLICKHOUSE_USER:-default}
+  MOBIPWN_CLICKHOUSE_PASSWORD: ${MOBIPWN_CLICKHOUSE_PASSWORD:-mobipwn}
+  MOBIPWN_CLICKHOUSE_DB: ${MOBIPWN_CLICKHOUSE_DB:-mobipwn}
+  MOBIPWN_EVENTS_TTL_DAYS: ${MOBIPWN_EVENTS_TTL_DAYS:-90}
+  MOBIPWN_JOBS_ENABLED: ${MOBIPWN_JOBS_ENABLED:-1}
+  MOBIPWN_REQUIRE_AUTH: ${MOBIPWN_REQUIRE_AUTH:-1}
+  MOBIPWN_ADMIN_USER: ${MOBIPWN_ADMIN_USER:-admin}
+  MOBIPWN_ADMIN_PASSWORD: ${MOBIPWN_ADMIN_PASSWORD:-admin}
+  MOBIPWN_EXPOSE_DEV_LOGS: ${MOBIPWN_EXPOSE_DEV_LOGS:-0}
+  MOBIPWN_SEARCH_MAX_LIMIT: ${MOBIPWN_SEARCH_MAX_LIMIT:-10000}
+  MOBIPWN_SEARCH_DEFAULT_HOURS: ${MOBIPWN_SEARCH_DEFAULT_HOURS:-24}
+  MOBIPWN_SEARCH_REQUIRE_TIME_RANGE: ${MOBIPWN_SEARCH_REQUIRE_TIME_RANGE:-1}
+  MOBIPWN_SEARCH_MAX_QUERY_LEN: ${MOBIPWN_SEARCH_MAX_QUERY_LEN:-8192}
+  MOBIPWN_SEARCH_MAX_JOINS: ${MOBIPWN_SEARCH_MAX_JOINS:-2}
+  RUST_LOG: ${RUST_LOG:-info,mobipwn=info}
+  <<: *proxy-env
+
+x-rust-build: &rust-build
+  context: .
+  dockerfile: docker/Dockerfile.rust
+  args:
+    HTTP_PROXY: ${HTTP_PROXY:-}
+    HTTPS_PROXY: ${HTTPS_PROXY:-}
+    NO_PROXY: ${NO_PROXY:-}
+    BUGREPORT_EXTRACTOR_REPO: ${BUGREPORT_EXTRACTOR_REPO:-https://github.com/ismyphonepwned/bugreport-extractor-library.git}
+    SYSDIAGNOSE_EXTRACTOR_REPO: ${SYSDIAGNOSE_EXTRACTOR_REPO:-https://github.com/ismyphonepwned/sysdiagnose-extractor-library.git}
+    MOBIPWN_EXTRACTOR_REF: ${MOBIPWN_EXTRACTOR_REF:-}
+    MOBIPWN_DISABLE_BUILD_PROXY: ${MOBIPWN_DISABLE_BUILD_PROXY:-0}
+    MOBIPWN_CARGO_INSECURE_SSL: ${MOBIPWN_CARGO_INSECURE_SSL:-0}
+    CARGO_HTTP_CHECK_REVOKE: ${CARGO_HTTP_CHECK_REVOKE:-}
+    GIT_SSL_NO_VERIFY: ${GIT_SSL_NO_VERIFY:-}
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      POSTGRES_USER: mobipwn
+      POSTGRES_PASSWORD: mobipwn
+      POSTGRES_DB: mobipwn
+      <<: *proxy-env
+    ports:
+      - "${MOBIPWN_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mobipwn -d mobipwn -q"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: mobipwn
+      CLICKHOUSE_DB: mobipwn
+      <<: *proxy-env
+    ports:
+      - "${MOBIPWN_CLICKHOUSE_HTTP_PORT:-8123}:8123"
+      - "${MOBIPWN_CLICKHOUSE_NATIVE_PORT:-9000}:9000"
+    volumes:
+      - ./clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./clickhouse/config.d/dev-low-cpu.xml:/etc/clickhouse-server/config.d/dev-low-cpu.xml:ro
+      - chdata:/var/lib/clickhouse
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "clickhouse-client --user default --password mobipwn -q 'SELECT 1'",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    restart: unless-stopped
+
+  mobipwn-api:
+    build:
+      <<: *rust-build
+      target: mobipwn-api
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *mobipwn-env
+      MOBIPWN_POSTGRES_URL: postgres://mobipwn:mobipwn@postgres:5432/mobipwn
+      MOBIPWN_CLICKHOUSE_URL: http://clickhouse:8123
+      MOBIPWN_API_BIND: 0.0.0.0:3000
+      MOBIPWN_COLLECT_BLOB_DIR: /data/collect-blobs
+    volumes:
+      - collect_blobs:/data/collect-blobs
+    ports:
+      - "${MOBIPWN_API_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mobipwn-jobs:
+    build:
+      <<: *rust-build
+      target: mobipwn-jobs
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *mobipwn-env
+      MOBIPWN_POSTGRES_URL: postgres://mobipwn:mobipwn@postgres:5432/mobipwn
+      MOBIPWN_CLICKHOUSE_URL: http://clickhouse:8123
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      mobipwn-api:
+        condition: service_started
+    restart: unless-stopped
+
+  mobipwn-web:
+    build:
+      context: .
+      dockerfile: mobipwn-web/Dockerfile
+      args:
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-}
+        MOBIPWN_RUSTY_MAGPIE_MODE: ${MOBIPWN_RUSTY_MAGPIE_MODE:-fetch}
+        RUSTY_MAGPIE_PREBUILT_URL: ${RUSTY_MAGPIE_PREBUILT_URL:-}
+    ports:
+      - "${MOBIPWN_STACK_WEB_PORT:-8080}:80"
+    depends_on:
+      mobipwn-api:
+        condition: service_started
+    restart: unless-stopped
+
+  # Optional standalone search service (API embeds search by default).
+  mobipwn-search:
+    profiles: ["search"]
+    build:
+      <<: *rust-build
+      target: mobipwn-search
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *mobipwn-env
+      MOBIPWN_POSTGRES_URL: postgres://mobipwn:mobipwn@postgres:5432/mobipwn
+      MOBIPWN_CLICKHOUSE_URL: http://clickhouse:8123
+      MOBIPWN_SEARCH_BIND: 0.0.0.0:3002
+    ports:
+      - "${MOBIPWN_SEARCH_PORT:-3002}:3002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    restart: unless-stopped
+
+  vector:
+    image: timberio/vector:0.41.1-alpine
+    profiles: ["ingest"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *proxy-env
+    volumes:
+      - ./vector/vector.toml:/etc/vector/vector.toml:ro
+      - ./parsers:/etc/vector/parsers:ro
+    ports:
+      - "8686:8686"
+    depends_on:
+      mobipwn-api:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  chdata:
+  collect_blobs:

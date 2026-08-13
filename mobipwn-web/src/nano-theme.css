@@ -1,0 +1,214 @@
+/* nano SIEM design tokens — aligned with nano-rs/nano DESIGN_SYSTEM.md (MIT UI, no AGPL code) */
+
+html.light {
+  --background: #f4f5f7;
+  --foreground: #111827;
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --muted: #eef0f3;
+  --muted-foreground: #6b7280;
+  --primary: #0e7490;
+  --primary-foreground: #ffffff;
+  --accent: #e8eaed;
+  --accent-foreground: #111827;
+  --destructive: #dc2626;
+  --severity-critical: #b91c1c;
+  --severity-high: #c2410c;
+  --severity-medium: #1d4ed8;
+  --severity-low: #57534e;
+  --severity-info: #0e7490;
+  --border: #d1d5db;
+  --border-2: #e5e7eb;
+  --input: #ffffff;
+  --input-border: #d1d5db;
+  --ring: #0e7490;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #111827;
+  --sidebar-border: #e5e7eb;
+  --sidebar-accent: #f3f4f6;
+  --outer: #e5e7eb;
+  --panel: #ffffff;
+  --card-2: #f3f4f6;
+  --inspector: #f9fafb;
+  --brand: #0e7490;
+  --brand-1000: #155e75;
+  --success: #059669;
+  --accent-purple: #6d28d9;
+  --accent-green: #15803d;
+  --accent-blue: #1d4ed8;
+  --accent-orange: #c2410c;
+  --accent-cyan: #0e7490;
+  --accent-yellow: #a16207;
+  --accent-pink: #be185d;
+  --accent-teal: #0f766e;
+  --radius: 6px;
+  --radius-sm: 3px;
+  --font-sans: "Geist Variable", system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, Menlo, monospace;
+}
+
+html.dark {
+  --background: #0b0e12;
+  --foreground: #e5e7eb;
+  --card: #11151b;
+  --card-foreground: #e5e7eb;
+  --muted: #0f1319;
+  --muted-foreground: #a8acb4;
+  --primary: #5ee7f0;
+  --primary-foreground: #06080b;
+  --accent: #161b23;
+  --accent-foreground: #e5e7eb;
+  --destructive: #ef4444;
+  --severity-critical: #f87171;
+  --severity-high: #fb923c;
+  --severity-medium: #60a5fa;
+  --severity-low: #a8acb4;
+  --severity-info: #22d3ee;
+  --border: #1a1f27;
+  --border-2: #272c35;
+  --input: #0e1319;
+  --input-border: #272c35;
+  --ring: #5ee7f0;
+  --sidebar: #06080b;
+  --sidebar-foreground: #e5e7eb;
+  --sidebar-border: #1a1f27;
+  --sidebar-accent: #161b23;
+  --outer: #06080b;
+  --panel: #0f1319;
+  --card-2: #161b23;
+  --inspector: #0e1218;
+  --brand: #5ee7f0;
+  --brand-1000: #1c9cf0;
+  --success: #34d399;
+  --accent-purple: #c084fc;
+  --accent-green: #4ade80;
+  --accent-blue: #60a5fa;
+  --accent-orange: #fdba74;
+  --accent-cyan: #22d3ee;
+  --accent-yellow: #facc15;
+  --radius: 6px;
+  --radius-sm: 3px;
+  --font-sans: "Geist Variable", system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, Menlo, monospace;
+}
+
+/* Analyst / IDE — warm dark base, soft contrast (Catppuccin Mocha + Tokyo Night) */
+html.focus {
+  color-scheme: dark;
+  --background: #1e1e2e;
+  --foreground: #cdd6f4;
+  --card: #24243a;
+  --card-foreground: #cdd6f4;
+  --muted: #313244;
+  --muted-foreground: #a6adc8;
+  --primary: #89b4fa;
+  --primary-foreground: #1e1e2e;
+  --accent: #2a2a3c;
+  --accent-foreground: #cdd6f4;
+  --destructive: #f38ba8;
+  --severity-critical: #f38ba8;
+  --severity-high: #fab387;
+  --severity-medium: #89b4fa;
+  --severity-low: #a6adc8;
+  --severity-info: #94e2d5;
+  --border: #3b3b52;
+  --border-2: #45475a;
+  --input: #24243a;
+  --input-border: #45475a;
+  --ring: #89b4fa;
+  --sidebar: #181825;
+  --sidebar-foreground: #bac2de;
+  --sidebar-border: #313244;
+  --sidebar-accent: #24243a;
+  --outer: #181825;
+  --panel: #24243a;
+  --card-2: #2a2a3c;
+  --inspector: #1f1f31;
+  --brand: #89b4fa;
+  --brand-1000: #74a0e8;
+  --success: #a6e3a1;
+  --accent-purple: #cba6f7;
+  --accent-green: #a6e3a1;
+  --accent-blue: #89b4fa;
+  --accent-orange: #fab387;
+  --accent-cyan: #94e2d5;
+  --accent-yellow: #f9e2af;
+  --accent-pink: #f5c2e7;
+  --accent-teal: #94e2d5;
+  --radius: 6px;
+  --radius-sm: 3px;
+  --font-sans: "Geist Variable", system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, Menlo, monospace;
+}
+
+html.focus body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html.matrix {
+  --background: #020b05;
+  --foreground: #39ff14;
+  --card: #041408;
+  --card-foreground: #5dff3a;
+  --muted: #031006;
+  --muted-foreground: #1f9a2f;
+  --primary: #00ff41;
+  --primary-foreground: #001a06;
+  --accent: #062010;
+  --accent-foreground: #7dff68;
+  --destructive: #ff3333;
+  --severity-critical: #ff4d4d;
+  --severity-high: #ffb347;
+  --severity-medium: #66ff99;
+  --severity-low: #1f9a2f;
+  --severity-info: #00ff41;
+  --border: #0d3d18;
+  --border-2: #145c22;
+  --input: #031006;
+  --input-border: #0d3d18;
+  --ring: #00ff41;
+  --sidebar: #010804;
+  --sidebar-foreground: #39ff14;
+  --sidebar-border: #0d3d18;
+  --sidebar-accent: #062010;
+  --outer: #010804;
+  --panel: #031006;
+  --card-2: #062010;
+  --inspector: #041408;
+  --brand: #00ff41;
+  --brand-1000: #00cc33;
+  --success: #39ff14;
+  --accent-purple: #7dff68;
+  --accent-green: #00ff41;
+  --accent-blue: #33ffaa;
+  --accent-orange: #aaff00;
+  --accent-cyan: #00ff99;
+  --accent-yellow: #ccff00;
+  --accent-pink: #66ff66;
+  --accent-teal: #00ff66;
+  --radius: 4px;
+  --radius-sm: 2px;
+  --font-sans: "Geist Mono Variable", ui-monospace, Menlo, monospace;
+  --font-mono: "Geist Mono Variable", ui-monospace, Menlo, monospace;
+}
+
+html.matrix body {
+  text-shadow: 0 0 6px color-mix(in srgb, var(--primary) 35%, transparent);
+}
+
+html.matrix::after {
+  content: "";
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  opacity: 0.06;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    color-mix(in srgb, var(--primary) 40%, transparent) 2px,
+    color-mix(in srgb, var(--primary) 40%, transparent) 3px
+  );
+}

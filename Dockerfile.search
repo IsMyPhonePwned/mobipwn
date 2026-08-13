@@ -1,0 +1,2 @@
+# Builds via docker/Dockerfile.rust (clones extractor libs during image build).
+# docker build -f docker/Dockerfile.rust --target mobipwn-search .

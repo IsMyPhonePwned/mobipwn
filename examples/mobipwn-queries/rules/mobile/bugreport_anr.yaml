@@ -1,0 +1,11 @@
+name: Bugreport ANR (Crash parser)
+description: |
+  Surfaces Application Not Responding artifacts from bugreport Crash parser output:
+  ANR trace files and ANR file listings.
+
+  Pair with rule "Bugreport native crash (tombstone)" for full crash/ANR coverage.
+query: |
+  source="case-001" parser="Crash" (data_type="android:bugreport:anr_file" OR data_type="android:bugreport:anr_trace") | head 100
+severity: medium
+cron: "0 */12 * * *"
+lifecycle: live

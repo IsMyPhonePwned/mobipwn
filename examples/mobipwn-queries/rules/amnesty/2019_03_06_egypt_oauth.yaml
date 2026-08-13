@@ -1,0 +1,8 @@
+name: AmnestyTech Investigations - Egypt OAuth Abuse (2019-03-06)
+description: |
+  Egypt OAuth phishing/credential theft domains. Full list at https://github.com/AmnestyTech/investigations/tree/master/2019-03-06_egypt_oauth (id: amnesty-inv-2019-03-06-egypt-oauth)
+query: |
+  (((destination_domain="account-login.site" OR dest_ip="account-login.site" OR message=*account-login.site*) OR (destination_domain="login-service.email" OR dest_ip="login-service.email" OR message=*login-service.email*) OR (destination_domain="mail-secure.online" OR dest_ip="mail-secure.online" OR message=*mail-secure.online*) OR (destination_domain="mail-verify.live" OR dest_ip="mail-verify.live" OR message=*mail-verify.live*) OR (destination_domain="secure-accounts.online" OR dest_ip="secure-accounts.online" OR message=*secure-accounts.online*) OR (destination_domain="signin-aouth2.pw" OR dest_ip="signin-aouth2.pw" OR message=*signin-aouth2.pw*) OR (destination_domain="verify-mail.pro" OR dest_ip="verify-mail.pro" OR message=*verify-mail.pro*) OR (destination_domain="verifymail.live" OR dest_ip="verifymail.live" OR message=*verifymail.live*) OR (destination_domain="www.secure-email.site" OR dest_ip="www.secure-email.site" OR message=*www.secure-email.site*))) | head 500
+severity: high
+lifecycle: live
+cron: "0 */12 * * *"

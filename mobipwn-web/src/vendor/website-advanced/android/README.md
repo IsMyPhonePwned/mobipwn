@@ -1,0 +1,1 @@
+Vendored from `website/android-advanced.html` (IsMyPhonePwned site): the Adb workspace markup (`#status` + `#adb-workspace`), scoped CSS, and WebADB module script, adapted for embedding in mobipwn-web (`bootAndroidAdvanced` / import path to `vendor/webadb`). Prefer updating the website source and re-extracting when syncing features.

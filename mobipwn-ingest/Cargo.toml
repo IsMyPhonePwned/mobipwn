@@ -1,0 +1,39 @@
+[package]
+name = "mobipwn-ingest"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Ingest mobile timelines from bugreport/sysdiagnose extractors and VRL/Vector"
+
+[[bin]]
+name = "mobipwn-ingest"
+path = "src/bin/mobipwn-ingest.rs"
+
+[features]
+default = []
+# Unified log decode (macos-unifiedlogs) via sysdiagnose-extractor-library.
+logarchive-decode = ["sysdiagnose_extractor_library/logarchive-decode"]
+
+[dependencies]
+mobipwn-core = { workspace = true }
+sqlx = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+clickhouse = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+tokio = { workspace = true }
+clap = { version = "4", features = ["derive", "env"] }
+reqwest = { workspace = true }
+zip = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+bugreport_extractor_library = { path = "../../bugreport-extractor-library" }
+sysdiagnose_extractor_library = { path = "../../sysdiagnose-extractor-library", default-features = false }
+strum = { version = "0.26", features = ["derive"] }
+rayon = "1.10"

@@ -1,0 +1,8 @@
+name: AmnestyTech Investigations - Evolving Phishing (2019-08-16)
+description: |
+  Evolving phishing campaign domains and emails. Populate from domains.txt and emails.txt at https://github.com/AmnestyTech/investigations/tree/master/2019-08-16_evolving_phishing (id: amnesty-inv-2019-08-16-evolving-phishing)
+query: |
+  (((destination_domain="srf-google.site" OR dest_ip="srf-google.site" OR message=*srf-google.site*) OR (destination_domain="gmailusercontent.site" OR dest_ip="gmailusercontent.site" OR message=*gmailusercontent.site*) OR (destination_domain="protect-outlook.com" OR dest_ip="protect-outlook.com" OR message=*protect-outlook.com*)) OR (email="admin@microsoftstore.com" OR email="noreply@gmailusercontent.site" OR email="noreply@mailgoogle.ccm" OR email="googlecommunityteam-noreply@srf-google.site" OR email="noreply-accounts@google.cm" OR email="noreply@accounts-google.com" OR email="noreply@accounts-googleemail.site" OR email="accounts-noreply@google.ccm" OR email="alerts@valabs.info" OR email="google@noreply-accounts.com" OR email="no-reply@google.email")) | head 500
+severity: high
+lifecycle: live
+cron: "0 */12 * * *"

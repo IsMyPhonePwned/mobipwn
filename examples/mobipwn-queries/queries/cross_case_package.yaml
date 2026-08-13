@@ -1,0 +1,3 @@
+name: Cross-case package overlap
+description: Find a bundle_id across all ingested sources
+query: 'bundle_id="com.example.app" | stats count by source, parser | head 50'

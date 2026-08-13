@@ -1,0 +1,11 @@
+name: DarkSword iOS network IoCs
+description: |
+  Delivery, watering-hole, and exfiltration domains/IPs for the DarkSword iOS exploit
+  chain (GTIG, iVerify, Lookout, MVT). Campaigns: UNC6748 (snapshare.chat), PARS Defense
+  (sahibndn.io, e5.malaymoil.com), UNC6353 (static.cdncounter.net, sqwas.shapelie.com),
+  GHOSTKNIFE C2 (62.72.21.10, 72.60.98.48). Ref: Google GTIG Mar 2026.
+query: |
+  platform="ios" (((destination_domain="snapshare.chat" OR dest_ip="snapshare.chat" OR message=*snapshare.chat*) OR (destination_domain="sahibndn.io" OR dest_ip="sahibndn.io" OR message=*sahibndn.io*) OR (destination_domain="e5.malaymoil.com" OR dest_ip="e5.malaymoil.com" OR message=*e5.malaymoil.com*) OR (destination_domain="static.cdncounter.net" OR dest_ip="static.cdncounter.net" OR message=*static.cdncounter.net*) OR (destination_domain="sqwas.shapelie.com" OR dest_ip="sqwas.shapelie.com" OR message=*sqwas.shapelie.com*) OR (destination_domain="novosti.dn.ua" OR dest_ip="novosti.dn.ua" OR message=*novosti.dn.ua*) OR (destination_domain="7aac.gov.ua" OR dest_ip="7aac.gov.ua" OR message=*7aac.gov.ua*)) OR (dest_ip="62.72.21.10" OR message=*62.72.21.10*) OR (dest_ip="72.60.98.48" OR message=*72.60.98.48*)) | head 500
+severity: critical
+lifecycle: live
+cron: "0 */12 * * *"
