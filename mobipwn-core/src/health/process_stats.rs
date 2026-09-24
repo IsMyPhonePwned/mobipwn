@@ -25,9 +25,6 @@ const MOBIPWN_CRATES: &[&str] = &[
     "mobipwn-mcp",
 ];
 
-/// Library crates embedded in a host binary (shown when the host process is running).
-const EMBEDDED_CRATES: &[(&str, &str)] = &[("mobipwn-ironsift", "mobipwn-api")];
-
 #[derive(Debug, Clone, Serialize)]
 pub struct ProcessStats {
     pub pid: u32,
@@ -156,33 +153,6 @@ async fn fetch_mobipwn_process_health_uncached() -> (ProcessStats, Vec<CrateProc
                 pid: None,
                 running: false,
                 embedded: false,
-                memory_bytes: 0,
-                cpu_percent: 0.0,
-                uptime_secs: 0,
-            });
-        }
-    }
-
-    for (embedded, host) in EMBEDDED_CRATES {
-        if crates.iter().any(|c| c.crate_name == *embedded) {
-            continue;
-        }
-        if let Some(host_stats) = crates.iter().find(|c| c.crate_name == *host && c.running) {
-            crates.push(CrateProcessStats {
-                crate_name: embedded.to_string(),
-                pid: host_stats.pid,
-                running: true,
-                embedded: true,
-                memory_bytes: 0,
-                cpu_percent: 0.0,
-                uptime_secs: host_stats.uptime_secs,
-            });
-        } else {
-            crates.push(CrateProcessStats {
-                crate_name: embedded.to_string(),
-                pid: None,
-                running: false,
-                embedded: true,
                 memory_bytes: 0,
                 cpu_percent: 0.0,
                 uptime_secs: 0,

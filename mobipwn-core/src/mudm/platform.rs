@@ -2,7 +2,7 @@
 
 pub const ANDROID: &str = "android";
 pub const IOS: &str = "ios";
-/// Server/workstation/agent telemetry consumed by IronSift (process, network, file).
+/// Server/workstation/agent telemetry (process, network, file).
 pub const ENDPOINT: &str = "endpoint";
 
 /// Normalize ingest/vector aliases to a canonical platform slug.

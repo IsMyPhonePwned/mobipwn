@@ -218,7 +218,7 @@ impl CaseRepository {
         }
         let description = if platform == crate::mudm::ENDPOINT {
             format!(
-                "Ingested endpoint telemetry ({platform}) — search with source=\"{source}\" or open IronSift."
+                "Ingested endpoint telemetry ({platform}) — search with source=\"{source}\"."
             )
         } else {
             format!(
@@ -471,7 +471,7 @@ impl CaseRepository {
         Ok(rows)
     }
 
-    /// All cases tied to ingest data (for IronSift / AnoMark scope picker).
+    /// All cases tied to ingest data.
     pub async fn list_endpoint_cases(&self) -> anyhow::Result<Vec<CaseRecord>> {
         let rows = sqlx::query_as::<_, Row>(&format!(
             "{CASE_SELECT} WHERE c.ingest_source IS NOT NULL ORDER BY c.updated_at DESC LIMIT 200"

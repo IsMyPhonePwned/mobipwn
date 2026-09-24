@@ -188,10 +188,11 @@ Shared detection execution: **`mobipwn-search::execute_detection_rule`** (API **
 | **mobipwn-webadb** | WASM (excluded) | WebUSB ADB source; **prebuilt wasm is vendored** in `mobipwn-web/src/vendor/webadb/` |
 | **mobi-android-collector** | WASM (excluded) | Rusty Magpie Android artifact collector (bundled into web where enabled) |
 
-**External extractor repos** (sibling clones for host dev; cloned in Docker image build for `./compose.sh`):
+**External extractor / anonymizer libs** (sibling clones for host dev; cloned in Docker image build for `./compose.sh`):
 
 - [bugreport-extractor-library](https://github.com/ismyphonepwned/bugreport-extractor-library) — Android dumpstate parsers → timeline JSONL  
-- [sysdiagnose-extractor-library](https://github.com/ismyphonepwned/sysdiagnose-extractor-library) — iOS sysdiagnose → timeline JSONL
+- [sysdiagnose-extractor-library](https://github.com/ismyphonepwned/sysdiagnose-extractor-library) — iOS sysdiagnose → timeline JSONL  
+- [fakeMustache](https://github.com/ismyphonepwned/fakeMustache) — optional anonymize step during ingest (pseudonymize identifiers before indexing)
 
 ## Prerequisites & quick start
 
@@ -199,6 +200,7 @@ Shared detection execution: **`mobipwn-search::execute_detection_rule`** (API **
 - Sibling clones (for native CLI ingest):
   - `../bugreport-extractor-library`
   - `../sysdiagnose-extractor-library`
+  - `../fakeMustache` (linked into `mobipwn-ingest` for anonymize-on-ingest)
 
 ### Option A — Docker/Podman full stack (simplest install)
 
@@ -222,6 +224,16 @@ On first run, **`.env`** is created from `.env.example`. **Web UI:** http://127.
 | `./compose.sh down -v` | Stop and remove volumes |
 | `./compose.sh logs` | Tail service logs |
 | `./compose.sh status` | Container status + API health |
+
+**Share images externally** (USB / scp / registry):
+
+```bash
+./scripts/build-share-image.sh --platform linux/amd64 --tag 1.0.0
+# → dist/share/mobipwn-images-1.0.0.tar.gz
+# On target: ./scripts/load-docker-images.sh ./dist/share && ./compose.sh up --no-build
+```
+
+See [docs/DOCKER_DEPLOY.md](docs/DOCKER_DEPLOY.md).
 
 Optional profiles: `./compose.sh up --profile search` (standalone search on :3002), `./compose.sh up --profile ingest` (Vector agent).
 
@@ -266,8 +278,9 @@ Starts Postgres + ClickHouse (Docker), ClickHouse init + `scripts/ch-migrate.sh`
 | `./dev.sh --clean` | Wipe `pgdata` / `chdata` volumes, then start fresh |
 | `./dev.sh clean` | Wipe volumes only |
 | `./dev.sh --logarchive-decode` | Build API with unified log decode (off by default; persisted in `.dev/ports.env`) |
-| `./dev.sh --wasm-release` | Rebuild webadb + idevice-wasm in **release** (default; persisted as `MOBIPWN_WASM_PROFILE`) |
-| `./dev.sh --wasm-dev` | Rebuild webadb + idevice-wasm in fast/dev mode |
+| `./dev.sh --rebuild-wasm` | Rebuild webadb + idevice-wasm on this up (**off by default**) |
+| `./dev.sh --wasm-release` | Same as `--rebuild-wasm` with **release** profile |
+| `./dev.sh --wasm-dev` | Same as `--rebuild-wasm` with fast/dev profile |
 | `./dev.sh --insecure-cargo-ssl` | Cargo/git SSL workarounds for corporate TLS interception (see [docs/PROXY.md](docs/PROXY.md)) |
 
 Manual cargo with SSL workarounds: `./scripts/cargo.sh build -p mobipwn-api`
@@ -818,3 +831,4 @@ cargo clippy --workspace -- -D warnings
 - [nano-rs/nano](https://github.com/nano-rs/nano) — dual-store index model (ClickHouse events + Postgres metadata) that MobiPwn’s data layer follows
 - [bugreport-extractor-library](https://github.com/ismyphonepwned/bugreport-extractor-library)
 - [sysdiagnose-extractor-library](https://github.com/ismyphonepwned/sysdiagnose-extractor-library)
+- [fakeMustache](https://github.com/ismyphonepwned/fakeMustache) — anonymize-on-ingest component

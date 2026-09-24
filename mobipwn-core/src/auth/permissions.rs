@@ -25,8 +25,6 @@ pub enum Permission {
     HealthRead,
     NotificationsWrite,
     LlmUse,
-    IronSiftRead,
-    IronSiftWrite,
 }
 
 use super::ApiRole;
@@ -56,8 +54,6 @@ impl ApiRole {
                     | Permission::MarketplaceWrite
                     | Permission::HealthRead
                     | Permission::LlmUse
-                    | Permission::IronSiftRead
-                    | Permission::IronSiftWrite
             ),
             ApiRole::Viewer => matches!(
                 perm,
@@ -69,7 +65,6 @@ impl ApiRole {
                     | Permission::DashboardsRead
                     | Permission::MarketplaceRead
                     | Permission::HealthRead
-                    | Permission::IronSiftRead
             ),
         }
     }
@@ -97,8 +92,6 @@ impl ApiRole {
             Permission::HealthRead,
             Permission::NotificationsWrite,
             Permission::LlmUse,
-            Permission::IronSiftRead,
-            Permission::IronSiftWrite,
         ]
         .into_iter()
         .filter(|p| self.has(*p))

@@ -20,7 +20,6 @@ const PAGE_KEYS: Record<string, string> = {
   "/data": "pages.data",
   "/mudm": "pages.mudmFields",
   "/marketplace": "pages.marketplace",
-  "/ironsift": "IronSift",
   "/collector": "nav.collector",
   "/device-advanced": "deviceAdvanced.settingsTitle",
   "/case-comparison": "nav.caseComparison",

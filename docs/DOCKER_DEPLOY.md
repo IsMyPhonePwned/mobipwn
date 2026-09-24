@@ -14,6 +14,7 @@ Scripts:
 | Script | Role |
 |--------|------|
 | `./scripts/build-docker-images.sh` | Build images; `--export` tarball or `--push` to registry |
+| `./scripts/build-share-image.sh` | Convenience wrapper (default export `./dist/share`) |
 | `./scripts/load-docker-images.sh` | Load tarball on target host |
 | `./scripts/pull-docker-images.sh` | Pull from registry on target host |
 
@@ -64,7 +65,10 @@ Docker Hub: use `--registry docker.io/YOUR_DOCKERHUB_USER/mobipwn` instead of GH
 From the mobipwn repo root:
 
 ```bash
-chmod +x scripts/build-docker-images.sh scripts/load-docker-images.sh scripts/pull-docker-images.sh
+chmod +x scripts/build-docker-images.sh scripts/build-share-image.sh scripts/load-docker-images.sh scripts/pull-docker-images.sh
+
+# Recommended for external share
+./scripts/build-share-image.sh --platform linux/amd64 --tag 1.0.0
 
 # Native platform
 ./scripts/build-docker-images.sh --export ./dist/mobipwn-images
@@ -97,7 +101,7 @@ Images are saved with **compose-compatible `:latest` tags** (`mobipwn-mobipwn-ap
 
 Corporate proxy: set `HTTP_PROXY` / `HTTPS_PROXY` in `.env` before building — see [PROXY.md](PROXY.md).
 
-Sibling extractor repos (`../bugreport-extractor-library`, `../sysdiagnose-extractor-library`) are staged automatically when present; otherwise they are cloned during the image build.
+Sibling extractor / anonymizer libs (`../bugreport-extractor-library`, `../sysdiagnose-extractor-library`, `../fakeMustache`) are staged automatically when present; otherwise they are cloned during the image build. fakeMustache runs **inside ingest** (optional checkbox), not as a separate image.
 
 ---
 

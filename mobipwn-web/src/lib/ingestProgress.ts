@@ -87,26 +87,6 @@ export function endpointIngestSteps(
   }));
 }
 
-/** IronSift demo / fleet: ingest (optional) → analysis → results. */
-export function ironsiftRunSteps(
-  phase: IngestProgressPhase | null,
-  withIngest: boolean,
-  labels: { ingest: string; analysis: string; results: string }
-): IngestProgressStep[] {
-  const phases: IngestProgressPhase[] = withIngest
-    ? ["post", "analysis", "refresh"]
-    : ["analysis", "refresh"];
-  const stepLabels = withIngest
-    ? [labels.ingest, labels.analysis, labels.results]
-    : [labels.analysis, labels.results];
-  const idx = phase ? phases.indexOf(phase) : -1;
-  return stepLabels.map((label, i) => ({
-    id: phases[i],
-    label,
-    status: idx < 0 ? "pending" : i < idx ? "done" : i === idx ? "active" : "pending",
-  }));
-}
-
 /** Re-ingest: clear → parse → index. */
 export function reingestSteps(
   stage: string | undefined,

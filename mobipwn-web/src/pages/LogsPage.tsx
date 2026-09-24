@@ -243,7 +243,7 @@ export default function LogsPage() {
   const handleCancelJobs = useCallback(async () => {
     if (
       !window.confirm(
-        "Cancel all running background jobs? This stops enrichment sync, marks in-flight ingest and IronSift runs as failed, and clears the sync banner."
+        "Cancel all running background jobs? This stops enrichment sync, marks in-flight ingest runs as failed, and clears the sync banner."
       )
     ) {
       return;
@@ -253,7 +253,7 @@ export default function LogsPage() {
       const summary = await cancelRunningJobs();
       log(
         "info",
-        `Jobs cancelled — ingest: ${summary.ingest_jobs_failed}, IronSift: ${summary.ironsift_runs_failed}`
+        `Jobs cancelled — ingest: ${summary.ingest_jobs_failed}`
       );
       setEnrichmentSync(null);
       await loadServer();

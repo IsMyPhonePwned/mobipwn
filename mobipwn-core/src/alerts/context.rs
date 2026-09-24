@@ -18,14 +18,6 @@ pub struct AlertContext {
     pub device_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ironsift_run_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ironsift_detector: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ironsift_reasons: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ironsift_score: Option<f64>,
 }
 
 impl AlertContext {

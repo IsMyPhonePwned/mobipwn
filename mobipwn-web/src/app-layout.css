@@ -23143,6 +23143,65 @@ html.light .ironsift-severity--low {
   padding-top: 16px;
 }
 
+.ingest-anonymize {
+  margin-top: 12px;
+  padding: 10px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ingest-anonymize__check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ingest-anonymize__label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  max-width: 16rem;
+}
+
+.ingest-anonymize__opts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 10px 12px;
+  margin-top: 4px;
+}
+
+.ingest-anonymize__label--wide {
+  grid-column: 1 / -1;
+}
+
+.ingest-anonymize__label input[type="text"] {
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--foreground);
+}
+
+.ingest-anonymize__flags {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.ingest-anonymize__flag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
 .ingest-result {
   padding: 14px 16px;
   border-radius: 10px;

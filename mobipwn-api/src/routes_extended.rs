@@ -210,11 +210,6 @@ async fn delete_ingest_source(
     State(state): State<AppState>,
     Json(body): Json<DeleteIngestSourceRequest>,
 ) -> Result<Json<mobipwn_core::DeleteIngestResponse>, (StatusCode, Json<ApiErrorResponse>)> {
-    let source = body.source.trim();
-    let repo = mobipwn_ironsift::IronSiftRepository::new(state.pool.postgres.clone());
-    repo.delete_by_source(source)
-        .await
-        .map_err(|e| api_error(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     mobipwn_core::delete_ingest_source(
         &state.pool,
         &state.config,

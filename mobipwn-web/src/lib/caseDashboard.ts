@@ -1063,7 +1063,7 @@ export const DEFAULT_IOS_CASE_NETWORK_DASHBOARD: DashboardDocument = {
   ]),
 };
 
-/** Default dashboard for endpoint / IronSift ingest cases. */
+/** Default dashboard for endpoint ingest cases. */
 export const DEFAULT_ENDPOINT_CASE_DASHBOARD: DashboardDocument = {
   version: 3,
   description: "Endpoint fleet overview — hosts, processes, and network telemetry.",
@@ -1247,7 +1247,7 @@ export function normalizeCasePlatform(value: string): CasePlatform | null {
   const v = value.trim().toLowerCase();
   if (v === "android" || v === "bugreport" || v === "apk") return "android";
   if (v === "ios" || v === "sysdiagnose" || v === "iphone" || v === "ipad") return "ios";
-  if (v === "endpoint" || v === "vector" || v === "linux" || v === "ironsift") return "endpoint";
+  if (v === "endpoint" || v === "vector" || v === "linux") return "endpoint";
   return null;
 }
 

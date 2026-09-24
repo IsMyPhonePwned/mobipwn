@@ -10,7 +10,6 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import {
   fetchPlugins,
-  IRONSIFT_PLUGIN_ID,
   COLLECTOR_PLUGIN_ID,
   CASE_COMPARISON_PLUGIN_ID,
   DEVICE_ADVANCED_PLUGIN_ID,
@@ -21,7 +20,6 @@ import {
 
 /** When a plugin is missing from the API list, match server `default_enabled` flags. */
 const PLUGIN_DEFAULT_ENABLED: Record<string, boolean> = {
-  [IRONSIFT_PLUGIN_ID]: true,
   [CASE_COMPARISON_PLUGIN_ID]: true,
   [COLLECTOR_PLUGIN_ID]: false,
   [DEVICE_ADVANCED_PLUGIN_ID]: false,
@@ -94,9 +92,4 @@ export function usePlugins() {
     throw new Error("usePlugins must be used within PluginsProvider");
   }
   return ctx;
-}
-
-export function useIronSiftPluginEnabled() {
-  const { isEnabled, loaded } = usePlugins();
-  return { enabled: isEnabled(IRONSIFT_PLUGIN_ID), loaded };
 }

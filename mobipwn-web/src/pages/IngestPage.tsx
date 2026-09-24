@@ -119,6 +119,19 @@ export default function IngestPage() {
   const [sysdiagnoseOpts, setSysdiagnoseOpts] = useState<SysdiagnoseIngestConfig>(
     DEFAULT_SYSDIAGNOSE_INGEST_CONFIG
   );
+  const [anonEnabled, setAnonEnabled] = useState(false);
+  const [anonProfile, setAnonProfile] = useState<"balanced" | "strict" | "research">("balanced");
+  const [anonLogarchive, setAnonLogarchive] = useState<"drop" | "jsonl">("drop");
+  const [anonOrdinal, setAnonOrdinal] = useState(false);
+  const [anonKeepLocation, setAnonKeepLocation] = useState(false);
+  const [anonKeepCellIds, setAnonKeepCellIds] = useState(false);
+  const [anonGeneralizeCarrier, setAnonGeneralizeCarrier] = useState(false);
+  const [anonDropCarrier, setAnonDropCarrier] = useState(false);
+  const [anonPseudoPackages, setAnonPseudoPackages] = useState(false);
+  const [anonTimeShift, setAnonTimeShift] = useState("");
+  const [anonOnly, setAnonOnly] = useState("");
+  const [anonEntities, setAnonEntities] = useState("");
+  const [anonDropTextPkgs, setAnonDropTextPkgs] = useState("");
   const { log } = useActivityLog();
 
   const isEndpoint = platform === "endpoint";
@@ -214,6 +227,8 @@ export default function IngestPage() {
         switch (progress.stage) {
           case "queued":
             return t("ingest.stageQueued");
+          case "anonymizing":
+            return t("ingest.stageAnonymizing");
           case "opening":
             return t("ingest.stageOpening");
           case "parsing":
@@ -362,6 +377,37 @@ export default function IngestPage() {
                 ioservice_full_tree: sysdiagnoseOpts.ioservice_full_tree,
               }
             : undefined,
+        anonymize: anonEnabled
+          ? {
+              enabled: true,
+              profile: anonProfile,
+              logarchive: anonLogarchive,
+              ordinal: anonOrdinal,
+              keep_location: anonKeepLocation,
+              keep_cell_ids: anonKeepCellIds,
+              generalize_carrier: anonGeneralizeCarrier,
+              drop_carrier: anonDropCarrier,
+              pseudo_third_party_packages: anonPseudoPackages,
+              ...(anonTimeShift.trim() ? { time_shift: anonTimeShift.trim() } : {}),
+              ...(anonOnly.trim() ? { only: anonOnly.trim() } : {}),
+              ...(anonEntities.trim()
+                ? {
+                    entities: anonEntities
+                      .split(/[\n,]+/)
+                      .map((s) => s.trim())
+                      .filter(Boolean),
+                  }
+                : {}),
+              ...(anonDropTextPkgs.trim()
+                ? {
+                    drop_text_from_packages: anonDropTextPkgs
+                      .split(/[\n,]+/)
+                      .map((s) => s.trim())
+                      .filter(Boolean),
+                  }
+                : {}),
+            }
+          : undefined,
         onProgress: setProgress,
       });
       const msg = result.deduplicated
@@ -671,6 +717,146 @@ export default function IngestPage() {
                 </li>
               </ul>
             </div>
+
+            {!isEndpoint && (
+              <div className="ingest-anonymize">
+                <label className="ingest-anonymize__check">
+                  <input
+                    type="checkbox"
+                    checked={anonEnabled}
+                    disabled={loading}
+                    onChange={(e) => setAnonEnabled(e.target.checked)}
+                  />
+                  <span>{t("ingest.anonymizeEnable")}</span>
+                </label>
+                <p className="muted text-xs">{t("ingest.anonymizeLead")}</p>
+                {anonEnabled && (
+                  <div className="ingest-anonymize__opts">
+                    <label className="ingest-anonymize__label">
+                      <span>{t("ingest.anonymizeProfile")}</span>
+                      <select
+                        value={anonProfile}
+                        onChange={(e) =>
+                          setAnonProfile(e.target.value as "balanced" | "strict" | "research")
+                        }
+                        disabled={loading}
+                      >
+                        <option value="balanced">{t("ingest.anonymizeProfileBalanced")}</option>
+                        <option value="strict">{t("ingest.anonymizeProfileStrict")}</option>
+                        <option value="research">{t("ingest.anonymizeProfileResearch")}</option>
+                      </select>
+                    </label>
+                    <label className="ingest-anonymize__label">
+                      <span>{t("ingest.anonymizeLogarchive")}</span>
+                      <select
+                        value={anonLogarchive}
+                        onChange={(e) => setAnonLogarchive(e.target.value as "drop" | "jsonl")}
+                        disabled={loading}
+                      >
+                        <option value="drop">{t("ingest.anonymizeLogarchiveDrop")}</option>
+                        <option value="jsonl">{t("ingest.anonymizeLogarchiveJsonl")}</option>
+                      </select>
+                    </label>
+                    <label className="ingest-anonymize__label">
+                      <span>{t("ingest.anonymizeTimeShift")}</span>
+                      <input
+                        type="text"
+                        value={anonTimeShift}
+                        onChange={(e) => setAnonTimeShift(e.target.value)}
+                        placeholder="72h"
+                        disabled={loading}
+                      />
+                    </label>
+                    <label className="ingest-anonymize__label">
+                      <span>{t("ingest.anonymizeOnly")}</span>
+                      <input
+                        type="text"
+                        value={anonOnly}
+                        onChange={(e) => setAnonOnly(e.target.value)}
+                        placeholder="email,imei,ssid"
+                        disabled={loading}
+                      />
+                    </label>
+                    <label className="ingest-anonymize__label ingest-anonymize__label--wide">
+                      <span>{t("ingest.anonymizeEntities")}</span>
+                      <input
+                        type="text"
+                        value={anonEntities}
+                        onChange={(e) => setAnonEntities(e.target.value)}
+                        placeholder="gps=keep,imei=drop"
+                        disabled={loading}
+                      />
+                    </label>
+                    <label className="ingest-anonymize__label ingest-anonymize__label--wide">
+                      <span>{t("ingest.anonymizeDropTextPkgs")}</span>
+                      <input
+                        type="text"
+                        value={anonDropTextPkgs}
+                        onChange={(e) => setAnonDropTextPkgs(e.target.value)}
+                        placeholder="com.example.app"
+                        disabled={loading}
+                      />
+                    </label>
+                    <div className="ingest-anonymize__flags">
+                      <label className="ingest-anonymize__flag">
+                        <input
+                          type="checkbox"
+                          checked={anonOrdinal}
+                          disabled={loading}
+                          onChange={(e) => setAnonOrdinal(e.target.checked)}
+                        />
+                        {t("ingest.anonymizeOrdinal")}
+                      </label>
+                      <label className="ingest-anonymize__flag">
+                        <input
+                          type="checkbox"
+                          checked={anonKeepLocation}
+                          disabled={loading}
+                          onChange={(e) => setAnonKeepLocation(e.target.checked)}
+                        />
+                        {t("ingest.anonymizeKeepLocation")}
+                      </label>
+                      <label className="ingest-anonymize__flag">
+                        <input
+                          type="checkbox"
+                          checked={anonKeepCellIds}
+                          disabled={loading}
+                          onChange={(e) => setAnonKeepCellIds(e.target.checked)}
+                        />
+                        {t("ingest.anonymizeKeepCellIds")}
+                      </label>
+                      <label className="ingest-anonymize__flag">
+                        <input
+                          type="checkbox"
+                          checked={anonGeneralizeCarrier}
+                          disabled={loading}
+                          onChange={(e) => setAnonGeneralizeCarrier(e.target.checked)}
+                        />
+                        {t("ingest.anonymizeGeneralizeCarrier")}
+                      </label>
+                      <label className="ingest-anonymize__flag">
+                        <input
+                          type="checkbox"
+                          checked={anonDropCarrier}
+                          disabled={loading}
+                          onChange={(e) => setAnonDropCarrier(e.target.checked)}
+                        />
+                        {t("ingest.anonymizeDropCarrier")}
+                      </label>
+                      <label className="ingest-anonymize__flag">
+                        <input
+                          type="checkbox"
+                          checked={anonPseudoPackages}
+                          disabled={loading}
+                          onChange={(e) => setAnonPseudoPackages(e.target.checked)}
+                        />
+                        {t("ingest.anonymizePseudoPackages")}
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="ingest-actions">
               <Button disabled={!canUpload} onClick={() => void upload(false)}>

@@ -4,7 +4,6 @@ export type JobsControlSummary = {
   enrichment_cancel_requested: boolean;
   enrichment_status_cleared: boolean;
   ingest_jobs_failed: number;
-  ironsift_runs_failed: number;
 };
 
 export async function cancelRunningJobs(): Promise<JobsControlSummary> {

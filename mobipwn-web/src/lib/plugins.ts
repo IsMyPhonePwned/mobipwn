@@ -1,6 +1,5 @@
 import { apiFetch } from "@/lib/api";
 
-export const IRONSIFT_PLUGIN_ID = "ironsift";
 export const CASE_COMPARISON_PLUGIN_ID = "case_comparison";
 /** @deprecated Use CASE_COMPARISON_PLUGIN_ID */
 export const BUGREPORT_COMPARISON_PLUGIN_ID = CASE_COMPARISON_PLUGIN_ID;

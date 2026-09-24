@@ -27,6 +27,9 @@ pub struct IngestJobOptions {
     /// Rusty Magpie enrichment ran during Android bugreport ingest.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub magpie: Option<bool>,
+    /// fakeMustache anonymize ran before parse (`balanced` / `strict` / `research`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub anonymize_profile: Option<String>,
 }
 
 impl IngestJobOptions {

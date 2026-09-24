@@ -71,7 +71,10 @@ export function ActivityLogPanel({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="activity-log-sheet w-full max-w-xl sm:max-w-xl">
+      <SheetContent
+        side="right"
+        className="activity-log-sheet w-full max-w-xl sm:max-w-xl"
+      >
         <div className="flex items-center justify-between pr-8">
           <h2 className="text-sm font-medium">Activity log</h2>
           <div className="flex gap-2">

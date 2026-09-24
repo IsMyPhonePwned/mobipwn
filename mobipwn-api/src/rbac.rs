@@ -129,13 +129,6 @@ pub fn permission_for_request(method: &Method, path: &str) -> Option<Permission>
     if path.starts_with("/v1/case-comparison") || path.starts_with("/v1/bugreport-comparison") {
         return Some(Permission::CasesRead);
     }
-    if path.starts_with("/v1/ironsift") {
-        return Some(if method == Method::GET {
-            Permission::IronSiftRead
-        } else {
-            Permission::IronSiftWrite
-        });
-    }
     if path.starts_with("/v1/health") {
         return Some(Permission::HealthRead);
     }

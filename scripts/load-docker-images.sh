@@ -2,15 +2,15 @@
 # Load MobiPwn image bundle(s) built by ./scripts/build-docker-images.sh on another host.
 #
 # Usage:
-#   ./scripts/load-docker-images.sh ./dist/mobipwn-images
-#   ./scripts/load-docker-images.sh ./dist/mobipwn-images/mobipwn-images-1.0.0.tar.gz
+#   ./scripts/load-docker-images.sh ./dist/share
+#   ./scripts/load-docker-images.sh ./dist/share/mobipwn-images-1.0.0.tar.gz
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 usage() {
   cat <<'EOF'
-Load MobiPwn Docker images exported by build-docker-images.sh.
+Load MobiPwn Docker images exported by build-docker-images.sh / build-share-image.sh.
 
 Usage:
   ./scripts/load-docker-images.sh PATH

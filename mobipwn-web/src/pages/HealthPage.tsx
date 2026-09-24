@@ -139,13 +139,6 @@ type IntegrationsHealth = {
 type HealthDetail = {
   postgres: ComponentHealth;
   clickhouse: ComponentHealth;
-  ironsift: {
-    status: string;
-    detail?: string | null;
-    enabled: boolean;
-    total_runs: number;
-    anomark_models: number;
-  };
   alerting_rules: number;
   failed_rules_24h: number;
   pending_ingest_jobs: number;
@@ -290,7 +283,7 @@ export default function HealthPage() {
   const handleCancelJobs = useCallback(async () => {
     if (
       !window.confirm(
-        "Cancel all running background jobs? Enrichment sync will stop, and in-flight ingest / IronSift runs will be marked failed."
+        "Cancel all running background jobs? Enrichment sync will stop, and in-flight ingest runs will be marked failed."
       )
     ) {
       return;
@@ -300,7 +293,7 @@ export default function HealthPage() {
     try {
       const summary = await cancelRunningJobs();
       setJobsMsg(
-        `Cancelled — ingest: ${summary.ingest_jobs_failed}, IronSift: ${summary.ironsift_runs_failed}, enrichment status cleared.`
+        `Cancelled — ingest: ${summary.ingest_jobs_failed}, enrichment status cleared.`
       );
       log("info", "Cancel all jobs from Health");
       await load();
@@ -970,29 +963,12 @@ export default function HealthPage() {
                   <p className="muted health-service-detail">{data.clickhouse.detail}</p>
                 )}
               </div>
-              <div className="stat-card health-service-card">
-                <div className="muted">IronSift</div>
-                <div className={`health-status ${statusClass(data.ironsift.status)}`}>
-                  {data.ironsift.status}
-                </div>
-                {data.ironsift.detail && (
-                  <p className="muted health-service-detail">{data.ironsift.detail}</p>
-                )}
-              </div>
             </div>
           </section>
 
           <section className="health-section">
             <h2 className="health-section-title">Operations</h2>
             <div className="stat-grid">
-              <div className="stat-card">
-                <div className="muted">IronSift runs</div>
-                <div className="stat-value">{data.ironsift.total_runs}</div>
-              </div>
-              <div className="stat-card">
-                <div className="muted">AnoMark models</div>
-                <div className="stat-value">{data.ironsift.anomark_models}</div>
-              </div>
               <div className="stat-card">
                 <div className="muted">Alerting rules</div>
                 <div className="stat-value">{data.alerting_rules}</div>
@@ -1013,7 +989,7 @@ export default function HealthPage() {
             <div className="health-jobs-control">
               <p className="muted health-jobs-control-hint">
                 Stuck enrichment sync banner or runaway background work? Cancel signals mobipwn-jobs
-                to stop the current enrichment sync and marks in-flight ingest / IronSift DB jobs as
+                to stop the current enrichment sync and marks in-flight ingest DB jobs as
                 failed. Restart <code className="mono">mobipwn-jobs</code> from your shell if the
                 process itself needs a fresh start.
               </p>

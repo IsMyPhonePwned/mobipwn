@@ -1,3 +1,22 @@
+/** Turn API / fetch errors into a short user-facing string. */
+export function parseApiError(err: unknown): string {
+  if (err instanceof Error) {
+    const msg = err.message.trim();
+    if (msg.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(msg) as { error?: string; message?: string };
+        if (parsed.error) return parsed.error;
+        if (parsed.message) return parsed.message;
+      } catch {
+        /* fall through */
+      }
+    }
+    return msg || "Request failed";
+  }
+  if (typeof err === "string") return err.trim() || "Request failed";
+  return String(err);
+}
+
 /** Read API response body safely (handles empty body and plain-text errors). */
 export async function parseApiResponse<T = unknown>(res: Response): Promise<T> {
   const text = await res.text();

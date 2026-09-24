@@ -180,7 +180,7 @@ export const AGENTS_SEARCH_CALLOUTS: MplGuideCallout[] = [
   {
     variant: "important",
     title: "Mobile context",
-    body: "Tell the agent Android bugreport vs iOS sysdiagnose. IronSift endpoint JSONL uses platform=\"endpoint\" — different hunts.",
+    body: "Tell the agent Android bugreport vs iOS sysdiagnose. Endpoint JSONL uses platform=\"endpoint\" — different hunts.",
   },
 ];
 

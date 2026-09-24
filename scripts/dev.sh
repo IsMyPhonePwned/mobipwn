@@ -262,21 +262,23 @@ cmd_up() {
     echo $! >"$JOBS_PID"
   fi
 
-  echo "==> WebUSB wasm (webadb + idevice-rs) [${MOBIPWN_WASM_PROFILE:-release}]"
-  wasm_profile="${MOBIPWN_WASM_PROFILE:-release}"
-  if [[ "$wasm_profile" != "dev" && "$wasm_profile" != "release" ]]; then
-    echo "Invalid MOBIPWN_WASM_PROFILE=$wasm_profile (use dev or release)" >&2
-    exit 1
-  fi
-  if ! command -v wasm-pack >/dev/null 2>&1; then
-    echo "    WARN: wasm-pack missing — skip WebUSB wasm rebuild (cargo install wasm-pack)" >&2
-  else
-    echo "    building webadb-wasm ($wasm_profile)…"
-    bash "$ROOT/scripts/build-webadb-wasm.sh" "$wasm_profile" \
-      || echo "    WARN: webadb-wasm build failed — /collect Android WebUSB may be stale" >&2
-    echo "    building idevice-wasm ($wasm_profile)…"
-    bash "$ROOT/scripts/build-idevice-wasm.sh" "$wasm_profile" \
-      || echo "    WARN: idevice-wasm build failed — iOS WebUSB needs LLVM clang (brew install llvm) + sibling idevice-rs" >&2
+  if [[ "${MOBIPWN_REBUILD_WASM:-0}" == "1" ]]; then
+    echo "==> WebUSB wasm (webadb + idevice-rs) [${MOBIPWN_WASM_PROFILE:-release}]"
+    wasm_profile="${MOBIPWN_WASM_PROFILE:-release}"
+    if [[ "$wasm_profile" != "dev" && "$wasm_profile" != "release" ]]; then
+      echo "Invalid MOBIPWN_WASM_PROFILE=$wasm_profile (use dev or release)" >&2
+      exit 1
+    fi
+    if ! command -v wasm-pack >/dev/null 2>&1; then
+      echo "    WARN: wasm-pack missing — skip WebUSB wasm rebuild (cargo install wasm-pack)" >&2
+    else
+      echo "    building webadb-wasm ($wasm_profile)…"
+      bash "$ROOT/scripts/build-webadb-wasm.sh" "$wasm_profile" \
+        || echo "    WARN: webadb-wasm build failed — /collect Android WebUSB may be stale" >&2
+      echo "    building idevice-wasm ($wasm_profile)…"
+      bash "$ROOT/scripts/build-idevice-wasm.sh" "$wasm_profile" \
+        || echo "    WARN: idevice-wasm build failed — iOS WebUSB needs LLVM clang (brew install llvm) + sibling idevice-rs" >&2
+    fi
   fi
 
   if [[ ! -f "$ROOT/mobipwn-web/public/vendor/rusty-magpie/rusty_magpie" ]]; then
@@ -341,7 +343,9 @@ cmd_status() {
   else
     echo "logarchive decode: off (enable: ./dev.sh --logarchive-decode)"
   fi
-  echo "webusb wasm profile: ${MOBIPWN_WASM_PROFILE:-release} (idevice + webadb rebuilt on each up)"
+  if [[ "${MOBIPWN_REBUILD_WASM:-0}" == 1 ]]; then
+    echo "webusb wasm: rebuild on up (${MOBIPWN_WASM_PROFILE:-release})"
+  fi
   if [[ -n "${HTTP_PROXY:-}" ]]; then
     echo "cargo proxy fixes: enabled (sparse index, git CLI — from HTTP_PROXY in .env)"
   fi
@@ -362,6 +366,7 @@ CLEAN_DB=0
 MOBIPWN_LOGARCHIVE_DECODE="${MOBIPWN_LOGARCHIVE_DECODE:-0}"
 MOBIPWN_CARGO_INSECURE_SSL="${MOBIPWN_CARGO_INSECURE_SSL:-0}"
 MOBIPWN_WASM_PROFILE="${MOBIPWN_WASM_PROFILE:-release}"
+MOBIPWN_REBUILD_WASM="${MOBIPWN_REBUILD_WASM:-0}"
 CMD_ARGS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -379,14 +384,21 @@ while [[ $# -gt 0 ]]; do
       export MOBIPWN_CARGO_INSECURE_SSL
       shift
       ;;
+    --rebuild-wasm)
+      MOBIPWN_REBUILD_WASM=1
+      export MOBIPWN_REBUILD_WASM
+      shift
+      ;;
     --wasm-dev)
       MOBIPWN_WASM_PROFILE=dev
-      export MOBIPWN_WASM_PROFILE
+      MOBIPWN_REBUILD_WASM=1
+      export MOBIPWN_WASM_PROFILE MOBIPWN_REBUILD_WASM
       shift
       ;;
     --wasm-release)
       MOBIPWN_WASM_PROFILE=release
-      export MOBIPWN_WASM_PROFILE
+      MOBIPWN_REBUILD_WASM=1
+      export MOBIPWN_WASM_PROFILE MOBIPWN_REBUILD_WASM
       shift
       ;;
     --port|-p)
@@ -435,18 +447,21 @@ case "$CMD" in
     echo "  --port, -p PORT       Web UI port (default 5173; API uses PORT+1, e.g. 5174)" >&2
     echo "  --logarchive-decode   Build API/ingest with unified log decode (macos-unifiedlogs)" >&2
     echo "  --insecure-cargo-ssl  Cargo/git SSL workarounds for corporate TLS interception" >&2
-    echo "  --wasm-release        Rebuild webadb + idevice-wasm in release (default)" >&2
-    echo "  --wasm-dev            Rebuild webadb + idevice-wasm in fast/dev mode" >&2
+    echo "  --rebuild-wasm        Rebuild webadb + idevice-wasm on this up (off by default)" >&2
+    echo "  --wasm-release        Same as --rebuild-wasm with release profile" >&2
+    echo "  --wasm-dev            Same as --rebuild-wasm with fast/dev profile" >&2
     echo "  --clean, -c           Wipe database volumes on start (with up)" >&2
     echo "" >&2
     echo "Environment:" >&2
     echo "  MOBIPWN_LOGARCHIVE_DECODE=1   Same as --logarchive-decode (persisted in .dev/ports.env)" >&2
     echo "  MOBIPWN_CARGO_INSECURE_SSL=1  Same as --insecure-cargo-ssl (persisted in .dev/ports.env)" >&2
-    echo "  MOBIPWN_WASM_PROFILE=dev|release  WebUSB wasm rebuild mode (default release; persisted)" >&2
+    echo "  MOBIPWN_REBUILD_WASM=1        Rebuild WebUSB wasm on up (off by default)" >&2
+    echo "  MOBIPWN_WASM_PROFILE=dev|release  Profile used when rebuilding wasm" >&2
     echo "" >&2
     echo "Examples:" >&2
     echo "  $0 --port 5180" >&2
     echo "  $0 --logarchive-decode" >&2
+    echo "  $0 --rebuild-wasm" >&2
     echo "  $0 --wasm-dev" >&2
     echo "  $0 up -p 3001 --clean" >&2
     exit 1

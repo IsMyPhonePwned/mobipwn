@@ -235,8 +235,7 @@ export const ARCH_GUIDE_SECTIONS: ArchGuideSection[] = [
         ["mobipwn-search", "Lib + bin", "mPL parser, SQL gen, admission, run_search, execute_detection_rule"],
         ["mobipwn-ingest", "Lib + bin", "Extractors, JSONL, CH insert, import-rules, mobipwn-ingest CLI"],
         ["mobipwn-api", "Binary", "Axum REST, OpenAPI, auth, ingest jobs, collect blobs, LLM/MCP"],
-        ["mobipwn-jobs", "Binary", "Detection cron, enrichment cron, prevalence, realtime MVs, IronSift"],
-        ["mobipwn-ironsift", "Library", "Endpoint baselines & temporal anomaly runs"],
+        ["mobipwn-jobs", "Binary", "Detection cron, enrichment cron, prevalence, realtime MVs"],
         ["mobipwn-dac", "Binary", "GitOps deploy rules/queries from examples/mobipwn-queries"],
         ["mobipwn-mcp", "Binary", "MCP server for Cursor/Claude (stdio)"],
         ["mobipwn-web", "Frontend", "React UI (this app)"],
@@ -363,7 +362,6 @@ export const ARCH_GUIDE_SECTIONS: ArchGuideSection[] = [
         ["~2 min", "Reconcile schedulers; realtime signals → alert upsert"],
         ["~10 min", "Sync realtime rule materialized views"],
         ["~15 min", "Field prevalence rollup"],
-        ["~24 h", "IronSift scheduled fleet baselines"],
       ],
     },
     code: {

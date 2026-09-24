@@ -1,6 +1,6 @@
 # idevice-rs WebUSB WASM (Apple lockdown / sysdiagnose)
 
-`./dev.sh` rebuilds this on every `up` / `restart` (same profile as webadb: `MOBIPWN_WASM_PROFILE`, default **release**).
+`./dev.sh` does **not** rebuild this on every `up` / `restart`. Pass `--rebuild-wasm`, `--wasm-dev`, or `--wasm-release` when you need a fresh build (`MOBIPWN_WASM_PROFILE`, default **release**).
 
 ## One-time macOS prerequisite
 

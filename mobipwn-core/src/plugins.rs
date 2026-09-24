@@ -1,4 +1,4 @@
-//! Platform plugin registry — optional feature modules (IronSift first).
+//! Platform plugin registry — optional feature modules.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use crate::store::SettingsRepository;
 
 pub const KEY_PLATFORM_PLUGINS: &str = "platform_plugins";
-pub const IRONSIFT_PLUGIN_ID: &str = "ironsift";
 pub const CASE_COMPARISON_PLUGIN_ID: &str = "case_comparison";
 /// Legacy plugin id (migrated to [`CASE_COMPARISON_PLUGIN_ID`]).
 pub const BUGREPORT_COMPARISON_PLUGIN_ID: &str = "bugreport_comparison";
@@ -17,7 +16,6 @@ pub const DEVICE_ADVANCED_PLUGIN_ID: &str = "device_advanced";
 pub const PUBLIC_COLLECT_PLUGIN_ID: &str = "collector";
 const LEGACY_COLLECTOR_PLUGIN_ID: &str = "public_collect";
 const LEGACY_CASE_COMPARISON_PLUGIN_ID: &str = "bugreport_comparison";
-const KEY_IRONSIFT_CONFIG: &str = "ironsift_config";
 const KEY_PUBLIC_COLLECT_CONFIG: &str = "public_collect_config";
 
 #[derive(Debug, Clone)]
@@ -61,16 +59,6 @@ pub struct PluginInfo {
 /// Static catalog of integrated plugins (compile-time registry).
 pub fn plugin_catalog() -> &'static [PluginDescriptor] {
     &[
-        PluginDescriptor {
-            id: IRONSIFT_PLUGIN_ID,
-            name: "IronSift",
-            description:
-                "Fleet anomaly detection on endpoint telemetry — ingest, clustering, AnoMark, honeycomb.",
-            version: "0.1.0",
-            routes: &["/ironsift"],
-            nav_path: Some("/ironsift"),
-            default_enabled: true,
-        },
         PluginDescriptor {
             id: CASE_COMPARISON_PLUGIN_ID,
             name: "Case Comparison",
@@ -129,17 +117,10 @@ pub async fn load_plugins_config(
         return Ok(cfg);
     }
 
-    let ironsift_enabled = legacy_ironsift_enabled(settings).await.unwrap_or(true);
     let public_collect_enabled = legacy_public_collect_enabled(settings)
         .await
         .unwrap_or(false);
     let mut plugins = PlatformPluginsConfig::default();
-    plugins.plugins.insert(
-        IRONSIFT_PLUGIN_ID.to_string(),
-        PluginState {
-            enabled: ironsift_enabled,
-        },
-    );
     plugins.plugins.insert(
         COLLECTOR_PLUGIN_ID.to_string(),
         PluginState {
@@ -174,17 +155,6 @@ async fn legacy_public_collect_enabled(settings: &SettingsRepository) -> anyhow:
         .get("enabled")
         .and_then(|v| v.as_bool())
         .unwrap_or(false))
-}
-
-async fn legacy_ironsift_enabled(settings: &SettingsRepository) -> anyhow::Result<bool> {
-    let raw = settings.get(KEY_IRONSIFT_CONFIG).await?;
-    if raw.is_null() || raw.as_object().is_none_or(|o| o.is_empty()) {
-        return Ok(true);
-    }
-    Ok(raw
-        .get("enabled")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true))
 }
 
 pub async fn save_plugins_config(
@@ -239,9 +209,6 @@ pub async fn set_plugin_enabled(
     cfg.plugins
         .insert(id.to_string(), PluginState { enabled });
     save_plugins_config(settings, &cfg).await?;
-    if id == IRONSIFT_PLUGIN_ID {
-        sync_ironsift_config_enabled(settings, enabled).await?;
-    }
     if id == COLLECTOR_PLUGIN_ID || id == LEGACY_COLLECTOR_PLUGIN_ID {
         sync_public_collect_config(settings, enabled).await?;
     }
@@ -254,26 +221,6 @@ async fn sync_public_collect_config(
 ) -> anyhow::Result<()> {
     let cfg = crate::platform_settings::load_public_collect_config(settings).await?;
     crate::platform_settings::save_public_collect_config(settings, &cfg).await
-}
-
-async fn sync_ironsift_config_enabled(
-    settings: &SettingsRepository,
-    enabled: bool,
-) -> anyhow::Result<()> {
-    let raw = settings.get(KEY_IRONSIFT_CONFIG).await?;
-    let mut value = if raw.is_null() {
-        serde_json::json!({ "enabled": enabled })
-    } else {
-        let mut v = raw;
-        if let Some(obj) = v.as_object_mut() {
-            obj.insert("enabled".into(), serde_json::json!(enabled));
-        }
-        v
-    };
-    if value.get("enabled").is_none() {
-        value["enabled"] = serde_json::json!(enabled);
-    }
-    settings.set(KEY_IRONSIFT_CONFIG, &value).await
 }
 
 pub async fn list_plugins(settings: &SettingsRepository) -> anyhow::Result<Vec<PluginInfo>> {
@@ -299,23 +246,12 @@ pub async fn list_plugins(settings: &SettingsRepository) -> anyhow::Result<Vec<P
         .collect())
 }
 
-/// Apply plugin registry `enabled` flag onto IronSift config after loading from settings.
-pub fn apply_ironsift_plugin_enabled(
-    plugins: &PlatformPluginsConfig,
-    ironsift_enabled: &mut bool,
-) {
-    if let Some(state) = plugins.plugins.get(IRONSIFT_PLUGIN_ID) {
-        *ironsift_enabled = state.enabled;
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn catalog_includes_builtin_plugins() {
-        assert!(plugin_descriptor(IRONSIFT_PLUGIN_ID).is_some());
         assert!(plugin_descriptor(CASE_COMPARISON_PLUGIN_ID).is_some());
         assert!(plugin_descriptor(BUGREPORT_COMPARISON_PLUGIN_ID).is_none());
         assert!(plugin_descriptor(COLLECTOR_PLUGIN_ID).is_some());

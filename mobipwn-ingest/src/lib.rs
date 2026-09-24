@@ -4,6 +4,8 @@ mod clickhouse_insert;
 mod endpoint_zip;
 mod timeline;
 #[cfg(not(target_arch = "wasm32"))]
+mod anonymize;
+#[cfg(not(target_arch = "wasm32"))]
 mod bugreport_report;
 #[cfg(not(target_arch = "wasm32"))]
 mod magpie;
@@ -24,6 +26,8 @@ pub use endpoint_zip::{
 pub use mobipwn_core::endpoint_ingest::EndpointZipDeviceRule;
 pub use timeline::ingest_jsonl;
 
+#[cfg(not(target_arch = "wasm32"))]
+pub use anonymize::{anonymize_archive_file, AnonymizeIngestOptions};
 #[cfg(not(target_arch = "wasm32"))]
 pub use bugreport_report::{BugreportParseReport, ParserRunSummary};
 #[cfg(not(target_arch = "wasm32"))]

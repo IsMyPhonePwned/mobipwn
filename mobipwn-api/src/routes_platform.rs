@@ -571,13 +571,6 @@ async fn delete_case(
 
     if full_purge {
         if let Some(source) = ingest_label {
-            let repo = mobipwn_ironsift::IronSiftRepository::new(state.pool.postgres.clone());
-            repo.delete_by_source(&source)
-                .await
-                .map_err(|e| {
-                    tracing::error!(error = %e, "delete IronSift data for case source");
-                    StatusCode::INTERNAL_SERVER_ERROR
-                })?;
             mobipwn_core::delete_ingest_source(
                 &state.pool,
                 &state.config,
@@ -898,7 +891,6 @@ async fn jobs_control(
             enrichment_cancel_requested: false,
             enrichment_status_cleared: clear_stuck_enrichment_status(),
             ingest_jobs_failed: 0,
-            ironsift_runs_failed: 0,
         })),
         _ => Err(StatusCode::BAD_REQUEST),
     }

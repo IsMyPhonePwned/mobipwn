@@ -334,7 +334,6 @@ async fn tool_cases_get(state: &AppState, ctx: &AuthContext, args: &Value) -> Re
 async fn tool_rules_list(state: &AppState, ctx: &AuthContext) -> Result<Value, String> {
     require_perm(ctx, Permission::RulesRead)?;
     let rules = state.rules.list().await.map_err(|e| e.to_string())?;
-    let rules = mobipwn_ironsift::filter_public_rules(rules);
     serde_json::to_value(rules).map_err(|e| e.to_string())
 }
 

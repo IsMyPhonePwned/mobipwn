@@ -1,5 +1,0 @@
-use uuid::Uuid;
-
-pub const IRONSIFT_FLEET_RULE_ID: Uuid = uuid::uuid!("a0000000-0000-4000-8000-000000000001");
-pub const IRONSIFT_TEMPORAL_RULE_ID: Uuid = uuid::uuid!("a0000000-0000-4000-8000-000000000002");
-pub const IRONSIFT_FILE_RULE_ID: Uuid = uuid::uuid!("a0000000-0000-4000-8000-000000000003");

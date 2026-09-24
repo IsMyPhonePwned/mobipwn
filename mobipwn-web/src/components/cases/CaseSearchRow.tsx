@@ -350,7 +350,7 @@ export function CaseSearchRow({
               disabled={deleting}
               onClick={() => {
                 const msg = caseRec.ingest_source
-                  ? `Delete case “${caseRec.title}” and all ingested events, IronSift runs, and ingest jobs for source ${source}?`
+                  ? `Delete case “${caseRec.title}” and all ingested events and ingest jobs for source ${source}?`
                   : `Delete case “${caseRec.title}”?`;
                 if (!window.confirm(msg)) return;
                 void onDelete(caseRec);

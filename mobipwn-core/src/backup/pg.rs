@@ -23,11 +23,6 @@ const ALLOWED_TABLES: &[&str] = &[
     "search_history",
     "enrichment_providers",
     "ingest_jobs",
-    "ironsift_runs",
-    "ironsift_findings",
-    "ironsift_triage",
-    "ironsift_run_devices",
-    "ironsift_anomark_trains",
     "users",
     "api_keys",
 ];

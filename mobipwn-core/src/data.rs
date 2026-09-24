@@ -365,12 +365,6 @@ pub async fn rename_ingest_source(
 
     let ingest_jobs_updated = ingest_jobs.rename_source(old_source, new_source).await?;
 
-    sqlx::query("UPDATE ironsift_run_devices SET source = $2 WHERE source = $1")
-        .bind(old_source)
-        .bind(new_source)
-        .execute(&pool.postgres)
-        .await?;
-
     tracing::info!(
         old = old_source,
         new = new_source,

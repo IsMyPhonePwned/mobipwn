@@ -19,7 +19,7 @@ pub struct EndpointZipParseResult {
     pub tags: Vec<String>,
 }
 
-/// Parse a zip archive containing nested `.jsonl` logs (IronSift-style fleet ingest).
+/// Parse a zip archive containing nested `.jsonl` logs (fleet ingest).
 pub fn parse_endpoint_zip(
     bytes: &[u8],
     extra_tags: &[String],

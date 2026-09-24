@@ -11,13 +11,8 @@ use axum::{
 use mobipwn_core::auth::AuthContext;
 use mobipwn_core::alerts::{parse_status, status_str};
 use mobipwn_core::detection::{DetectionMode, DetectionRule, RuleLifecycle};
-use mobipwn_core::endpoint_ingest::EndpointZipDeviceRule;
-use mobipwn_core::mudm::{canonical, is_endpoint, stamp_ingest_tags, ANDROID, ENDPOINT, IOS, TimelinePlatform};
-use mobipwn_core::plugins::{is_plugin_enabled, IRONSIFT_PLUGIN_ID};
-use mobipwn_core::store::UpdateCase;
-use mobipwn_ingest::{
-    ingest_endpoint_zip_jsonl, ingest_jsonl, insert_events, parse_endpoint_zip,
-};
+use mobipwn_core::mudm::{canonical, stamp_ingest_tags, ANDROID, ENDPOINT, IOS, TimelinePlatform};
+use mobipwn_ingest::{ingest_jsonl, insert_events};
 use mobipwn_search::{
     admission::resolve_time_bounds, execute_detection_rule, generate_clickhouse_sql, parse_mpl,
     ExecuteDetectionOptions, ExecuteDetectionResult, FieldStatsRequest, FieldsInScopeRequest,
@@ -26,14 +21,6 @@ use mobipwn_search::{
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
-
-fn require_public_rule(id: &Uuid) -> Result<(), (axum::http::StatusCode, String)> {
-    if mobipwn_ironsift::is_system_rule_id(id) {
-        Err((axum::http::StatusCode::NOT_FOUND, "rule not found".into()))
-    } else {
-        Ok(())
-    }
-}
 
 #[derive(Serialize, ToSchema)]
 pub struct HealthResponse {
@@ -156,19 +143,6 @@ pub async fn fields_in_scope(
 
 type IngestErr = (StatusCode, Json<ApiErrorResponse>);
 
-async fn require_ironsift_plugin(state: &AppState) -> Result<(), IngestErr> {
-    let enabled = is_plugin_enabled(&state.settings, IRONSIFT_PLUGIN_ID)
-        .await
-        .map_err(|e| api_error(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    if !enabled {
-        return Err(api_error(
-            StatusCode::FORBIDDEN,
-            "IronSift plugin is disabled — enable it under Settings → Plugins to ingest endpoint telemetry",
-        ));
-    }
-    Ok(())
-}
-
 /// Default Axum body limit is 2MB; bugreports are often much larger.
 const INGEST_ARCHIVE_BODY_LIMIT: usize = 512 * 1024 * 1024;
 
@@ -202,9 +176,6 @@ pub async fn ingest_jsonl_handler(
             ));
         }
     };
-    if is_endpoint(&platform_label) {
-        require_ironsift_plugin(&state).await?;
-    }
     let mut events = ingest_jsonl(&body.jsonl, platform, &body.source);
     if let Some(ref extra) = body.tags {
         if !extra.is_empty() {
@@ -233,114 +204,6 @@ pub async fn ingest_jsonl_handler(
         }
         Err(e) => tracing::warn!(error = %e, "could not sync case for ingest source"),
     }
-    if is_endpoint(plat) {
-        crate::ironsift_hook::after_ingest(&state, &body.source, plat).await;
-    }
-    Ok(Json(IngestResponse { ingested: n }))
-}
-
-#[derive(Deserialize, ToSchema)]
-pub struct IngestEndpointZipQuery {
-    pub source: String,
-    pub user: Option<String>,
-    /// Comma-separated tags merged onto the investigation case.
-    pub tags: Option<String>,
-    /// 1-based segment from the parent directory name for `device_id` (overrides saved IronSift config).
-    pub parent_dir_device_field: Option<usize>,
-    /// Delimiter when splitting the parent directory name (default `-`).
-    pub parent_dir_delimiter: Option<String>,
-    /// 1-based parent-dir segment added as an ingest tag.
-    pub parent_dir_tag_field: Option<usize>,
-}
-
-pub async fn ingest_endpoint_zip_handler(
-    State(state): State<AppState>,
-    Query(q): Query<IngestEndpointZipQuery>,
-    body: Bytes,
-) -> Result<Json<IngestResponse>, IngestErr> {
-    require_ironsift_plugin(&state).await?;
-    let source = q.source.trim();
-    if source.is_empty() {
-        return Err(api_error(StatusCode::BAD_REQUEST, "source is required"));
-    }
-    let extra_tags: Vec<String> = q
-        .tags
-        .as_deref()
-        .map(|s| {
-            s.split(',')
-                .map(|t| t.trim().to_string())
-                .filter(|t| !t.is_empty())
-                .collect()
-        })
-        .unwrap_or_default();
-    let platform_cfg = mobipwn_ironsift::load_platform_config(&state.settings)
-        .await
-        .unwrap_or_default();
-    let mut device_rule = platform_cfg.endpoint_ingest.zip_device_rule.clone();
-    if let Some(field) = q.parent_dir_device_field {
-        device_rule.parent_dir_field = Some(field);
-    }
-    if let Some(delim) = q
-        .parent_dir_delimiter
-        .as_deref()
-        .and_then(|s| s.chars().next())
-    {
-        device_rule.delimiter = delim;
-    }
-    let parent_tag_field = q
-        .parent_dir_tag_field
-        .or(platform_cfg.endpoint_ingest.zip_parent_tag_field);
-    let parsed = parse_endpoint_zip(&body, &extra_tags, parent_tag_field, &device_rule)
-        .map_err(|e| api_error(StatusCode::BAD_REQUEST, e.to_string()))?;
-    let events = ingest_endpoint_zip_jsonl(&parsed.files, TimelinePlatform::Vector, source);
-    if events.is_empty() {
-        return Err(api_error(
-            StatusCode::BAD_REQUEST,
-            "zip JSONL files produced no ingestible events — each line needs a message field or IronSift event_type (e.g. file_information with file_path)",
-        ));
-    }
-    let n = insert_events(&state.clickhouse, &events)
-        .await
-        .map_err(|e| api_error(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    crate::ingest::verify_source_in_clickhouse(&state.config, source, n).await?;
-    let user = q.user.as_deref().map(str::trim).filter(|s| !s.is_empty());
-    match state
-        .cases
-        .ensure_for_ingest_source(source, ENDPOINT, user)
-        .await
-    {
-        Ok((case, is_new)) => {
-            let mut tags = case.tags.clone();
-            for t in parsed.tags.iter().chain(parsed.files.iter().flat_map(|f| f.tags.iter())) {
-                if !tags.iter().any(|x| x == t) {
-                    tags.push(t.clone());
-                }
-            }
-            if !tags.iter().any(|t| t == "endpoint") {
-                tags.push("endpoint".into());
-            }
-            let _ = state
-                .cases
-                .update(
-                    case.id,
-                    &UpdateCase {
-                        title: None,
-                        description: None,
-                        status: None,
-                        priority: None,
-                        user: None,
-                        tags: Some(tags),
-                        rename_ingest_source: None,
-                    },
-                )
-                .await;
-            if is_new {
-                crate::case_audit::audit_ingest_case_created(&state, &case).await;
-            }
-        }
-        Err(e) => tracing::warn!(error = %e, "could not sync case for endpoint zip ingest"),
-    }
-    crate::ironsift_hook::after_ingest(&state, source, ENDPOINT).await;
     Ok(Json(IngestResponse { ingested: n }))
 }
 
@@ -403,7 +266,6 @@ fn ingest_archive_router() -> Router<AppState> {
     Router::new()
         .route("/v1/ingest/bugreport", post(ingest_bugreport))
         .route("/v1/ingest/sysdiagnose", post(ingest_sysdiagnose))
-        .route("/v1/ingest/endpoint-zip", post(ingest_endpoint_zip_handler))
         .layer(DefaultBodyLimit::max(INGEST_ARCHIVE_BODY_LIMIT))
 }
 
@@ -478,7 +340,7 @@ pub async fn list_rules(
         .list_filtered(&filter)
         .await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(mobipwn_ironsift::filter_public_rules(rules)))
+    Ok(Json(rules))
 }
 
 pub async fn create_rule(
@@ -587,7 +449,6 @@ pub async fn get_rule(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<DetectionRule>, (axum::http::StatusCode, String)> {
-    require_public_rule(&id)?;
     let rule = state
         .rules
         .get(id)
@@ -626,7 +487,6 @@ pub async fn update_rule(
     Path(id): Path<Uuid>,
     Json(body): Json<UpdateRuleRequest>,
 ) -> Result<Json<DetectionRule>, (axum::http::StatusCode, String)> {
-    require_public_rule(&id)?;
     let mut rule = state
         .rules
         .get(id)
@@ -720,10 +580,6 @@ pub async fn bulk_delete_rules(
     let mut deleted = 0u32;
     let mut failed = 0u32;
     for id in body.ids {
-        if mobipwn_ironsift::is_system_rule_id(&id) {
-            failed += 1;
-            continue;
-        }
         mobipwn_core::detection::drop_materialized_view(&state.config, id)
             .await
             .ok();
@@ -740,7 +596,6 @@ pub async fn delete_rule_post(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
-    require_public_rule(&id)?;
     mobipwn_core::detection::drop_materialized_view(&state.config, id)
         .await
         .ok();
@@ -761,7 +616,6 @@ pub async fn validate_rule(
     Path(id): Path<Uuid>,
     body: Option<Json<ValidateRuleBody>>,
 ) -> Result<Json<mobipwn_search::RuleValidationResult>, (axum::http::StatusCode, String)> {
-    require_public_rule(&id)?;
     let rule = state
         .rules
         .get(id)
@@ -795,7 +649,6 @@ pub async fn run_rule_now(
     Path(id): Path<Uuid>,
     body: Option<Json<RunRuleBody>>,
 ) -> Result<Json<ExecuteDetectionResult>, (axum::http::StatusCode, String)> {
-    require_public_rule(&id)?;
     let rule = state
         .rules
         .get(id)
@@ -1270,7 +1123,6 @@ pub async fn move_rule(
     Path(id): Path<Uuid>,
     Json(body): Json<MoveRuleRequest>,
 ) -> Result<Json<DetectionRule>, (axum::http::StatusCode, String)> {
-    require_public_rule(&id)?;
     state
         .rules
         .move_rule(id, body.repository_id, body.folder_id)

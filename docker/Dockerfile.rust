@@ -12,6 +12,7 @@ ARG HTTPS_PROXY
 ARG NO_PROXY
 ARG BUGREPORT_EXTRACTOR_REPO=https://github.com/ismyphonepwned/bugreport-extractor-library.git
 ARG SYSDIAGNOSE_EXTRACTOR_REPO=https://github.com/ismyphonepwned/sysdiagnose-extractor-library.git
+ARG FAKEMUSTACHE_REPO=https://github.com/ismyphonepwned/fakeMustache.git
 ARG MOBIPWN_EXTRACTOR_REF
 ARG MOBIPWN_DISABLE_BUILD_PROXY
 ARG MOBIPWN_CARGO_INSECURE_SSL
@@ -52,8 +53,12 @@ RUN chmod +x /tmp/clone-extractors.sh \
  && if [ -f /tmp/docker-deps/sysdiagnose-extractor-library/Cargo.toml ]; then \
       cp -a /tmp/docker-deps/sysdiagnose-extractor-library /sysdiagnose-extractor-library; \
     fi \
+ && if [ -f /tmp/docker-deps/fakeMustache/Cargo.toml ]; then \
+      cp -a /tmp/docker-deps/fakeMustache /fakeMustache; \
+    fi \
  && BUGREPORT_EXTRACTOR_REPO="$BUGREPORT_EXTRACTOR_REPO" \
     SYSDIAGNOSE_EXTRACTOR_REPO="$SYSDIAGNOSE_EXTRACTOR_REPO" \
+    FAKEMUSTACHE_REPO="$FAKEMUSTACHE_REPO" \
     MOBIPWN_EXTRACTOR_REF="$MOBIPWN_EXTRACTOR_REF" \
     HTTP_PROXY="$HTTP_PROXY" \
     HTTPS_PROXY="$HTTPS_PROXY" \
@@ -65,11 +70,9 @@ COPY docker/Cargo.docker.toml ./Cargo.toml
 COPY mobipwn-core mobipwn-core
 COPY mobipwn-search mobipwn-search
 COPY mobipwn-ingest mobipwn-ingest
-COPY mobipwn-ironsift mobipwn-ironsift
 COPY mobipwn-api mobipwn-api
 COPY mobipwn-jobs mobipwn-jobs
 COPY migrations migrations
-COPY vendor/ironsift vendor/ironsift
 
 FROM rust-base AS rust-builder-api
 RUN cargo build --release -p mobipwn-api

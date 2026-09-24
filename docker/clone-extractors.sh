@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Clone bugreport/sysdiagnose extractor libraries for Docker Rust builds.
-# Paths match mobipwn-ingest: ../../bugreport-extractor-library from /app/mobipwn-ingest → /bugreport-extractor-library
+# Clone sibling libs for Docker Rust builds.
+# Paths match Cargo path deps: ../../NAME from /app/mobipwn-* → /NAME
 set -euo pipefail
 
 BUGREPORT_REPO="${BUGREPORT_EXTRACTOR_REPO:-https://github.com/ismyphonepwned/bugreport-extractor-library.git}"
 SYSDIAGNOSE_REPO="${SYSDIAGNOSE_EXTRACTOR_REPO:-https://github.com/ismyphonepwned/sysdiagnose-extractor-library.git}"
+FAKEMUSTACHE_REPO="${FAKEMUSTACHE_REPO:-https://github.com/ismyphonepwned/fakeMustache.git}"
 REF="${MOBIPWN_EXTRACTOR_REF:-}"
 
 export GIT_TERMINAL_PROMPT=0
@@ -19,8 +20,8 @@ fi
 clone_repo() {
   local url="$1"
   local dest="$2"
-  if [[ -d "$dest/.git" ]]; then
-    echo "==> extractor present: $dest"
+  if [[ -d "$dest/.git" || -f "$dest/Cargo.toml" ]]; then
+    echo "==> sibling present: $dest"
     return 0
   fi
   echo "==> cloning $url → $dest"
@@ -35,3 +36,4 @@ clone_repo() {
 
 clone_repo "$BUGREPORT_REPO" /bugreport-extractor-library
 clone_repo "$SYSDIAGNOSE_REPO" /sysdiagnose-extractor-library
+clone_repo "$FAKEMUSTACHE_REPO" /fakeMustache

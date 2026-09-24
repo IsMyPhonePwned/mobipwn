@@ -13,7 +13,6 @@ const HIDDEN_TAGS = new Set([
   "endpoint",
   "vector",
   "linux",
-  "ironsift",
   "bugreport",
   "sysdiagnose",
   "apk",
@@ -186,7 +185,6 @@ export function caseOriginQuickLink(
 ): CaseQuickLink | null {
   const origin = inferCaseOrigin(caseRec);
   if (origin === "collector") return { to: "/collector", label: "Collector" };
-  if (origin === "endpoint") return { to: "/ironsift", label: "IronSift" };
   if (origin === "ingest") return { to: "/ingest", label: "Ingest" };
   return null;
 }

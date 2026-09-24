@@ -8,7 +8,6 @@ members = [
     "mobipwn-ingest",
     "mobipwn-api",
     "mobipwn-jobs",
-    "mobipwn-ironsift",
 ]
 
 [workspace.package]
@@ -60,7 +59,4 @@ clap = { version = "4", features = ["derive", "env"] }
 mobipwn-core = { path = "mobipwn-core" }
 mobipwn-search = { path = "mobipwn-search" }
 mobipwn-ingest = { path = "mobipwn-ingest" }
-mobipwn-ironsift = { path = "mobipwn-ironsift" }
-ironsift = { path = "vendor/ironsift" }
-anomark = { git = "https://github.com/ping2A/anomark-rs.git" }
 zip = "2.2"

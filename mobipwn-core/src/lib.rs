@@ -75,10 +75,10 @@ pub use alert_siem::{
     SplunkHecEndpoint, SplunkHostMode, KEY_ALERT_TO_SIEM_CONFIG,
 };
 pub use plugins::{
-    apply_ironsift_plugin_enabled, is_plugin_enabled, list_plugins, load_plugins_config,
+    is_plugin_enabled, list_plugins, load_plugins_config,
     plugin_catalog, plugin_descriptor, set_plugin_enabled, PlatformPluginsConfig, PluginInfo,
     PluginState, ALERT_TO_SIEM_PLUGIN_ID, BUGREPORT_COMPARISON_PLUGIN_ID, CASE_COMPARISON_PLUGIN_ID,
-    COLLECTOR_PLUGIN_ID, DEVICE_ADVANCED_PLUGIN_ID, IRONSIFT_PLUGIN_ID, PUBLIC_COLLECT_PLUGIN_ID,
+    COLLECTOR_PLUGIN_ID, DEVICE_ADVANCED_PLUGIN_ID, PUBLIC_COLLECT_PLUGIN_ID,
     KEY_PLATFORM_PLUGINS,
 };
 pub use platform_settings::{

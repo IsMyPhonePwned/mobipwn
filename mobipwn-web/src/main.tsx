@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 import { AppShell } from "./layout/AppShell";
 import { PluginRoute } from "./components/PluginRoute";
-import { ALERT_TO_SIEM_PLUGIN_ID, CASE_COMPARISON_PLUGIN_ID, COLLECTOR_PLUGIN_ID, DEVICE_ADVANCED_PLUGIN_ID, IRONSIFT_PLUGIN_ID } from "./lib/plugins";
+import { ALERT_TO_SIEM_PLUGIN_ID, CASE_COMPARISON_PLUGIN_ID, COLLECTOR_PLUGIN_ID, DEVICE_ADVANCED_PLUGIN_ID } from "./lib/plugins";
 import { ActivityLogProvider } from "./contexts/ActivityLogContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { LlmProvider } from "./contexts/LlmContext";
@@ -48,7 +48,6 @@ const MarketplacePage = lazy(() => import("./pages/MarketplacePage"));
 const DetectionsPage = lazy(() => import("./pages/DetectionsPage"));
 const RuleEditorPage = lazy(() => import("./pages/RuleEditorPage"));
 const RuleRepositoriesPage = lazy(() => import("./pages/RuleRepositoriesPage"));
-const IronSiftPage = lazy(() => import("./pages/IronSiftPage"));
 const CaseComparisonPage = lazy(() => import("./pages/CaseComparisonPage"));
 const HealthPage = lazy(() => import("./pages/HealthPage"));
 const AlertToSiemPage = lazy(() => import("./pages/AlertToSiemPage"));
@@ -100,16 +99,6 @@ createRoot(document.getElementById("root")!).render(
             <Route path="rules/repositories" element={<Suspense fallback={<Loading />}><RuleRepositoriesPage /></Suspense>} />
             <Route path="detections" element={<Navigate to="/rules" replace />} />
             <Route path="marketplace" element={<Suspense fallback={<Loading />}><MarketplacePage /></Suspense>} />
-            <Route
-              path="ironsift"
-              element={
-                <Suspense fallback={<Loading />}>
-                  <PluginRoute pluginId={IRONSIFT_PLUGIN_ID}>
-                    <IronSiftPage />
-                  </PluginRoute>
-                </Suspense>
-              }
-            />
             <Route
               path="case-comparison"
               element={

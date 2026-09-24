@@ -5,13 +5,11 @@ mod case_audit;
 mod effective_config;
 mod ingest;
 mod detection_hook;
-mod ironsift_hook;
 mod routes;
 mod routes_extended;
 mod routes_alert_siem;
 mod routes_auth;
 mod routes_backup;
-mod routes_ironsift;
 mod routes_case_compare;
 mod routes_plugins;
 mod routes_mcp;
@@ -86,7 +84,6 @@ async fn main() -> anyhow::Result<()> {
     let config = AppConfig::from_env();
     let pool = Arc::new(DualPool::connect(&config).await?);
     run_migrations(&pool.postgres).await?;
-    mobipwn_ironsift::ensure_system_rules(&pool.postgres).await?;
 
     let admin_username =
         std::env::var("MOBIPWN_ADMIN_USER").unwrap_or_else(|_| "admin".into());
@@ -173,7 +170,6 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::router())
         .merge(routes_extended::router())
         .merge(routes_platform::router())
-        .merge(routes_ironsift::router())
         .merge(routes_case_compare::router())
         .merge(routes_plugins::router())
         .merge(routes_alert_siem::router())

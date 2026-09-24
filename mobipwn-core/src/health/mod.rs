@@ -16,15 +16,6 @@ use serde::Serialize;
 use sqlx::PgPool;
 
 #[derive(Debug, Serialize)]
-pub struct IronSiftHealth {
-    pub status: &'static str,
-    pub detail: Option<String>,
-    pub enabled: bool,
-    pub total_runs: i64,
-    pub anomark_models: i64,
-}
-
-#[derive(Debug, Serialize)]
 pub struct LlmHealth {
     pub status: &'static str,
     pub configured: bool,
@@ -68,7 +59,6 @@ pub struct IntegrationsHealth {
 pub struct HealthDetail {
     pub postgres: ComponentHealth,
     pub clickhouse: ComponentHealth,
-    pub ironsift: IronSiftHealth,
     pub alerting_rules: i64,
     pub failed_rules_24h: i64,
     pub pending_ingest_jobs: i64,
@@ -132,7 +122,6 @@ pub async fn fetch_health_detail(
     } else {
         None
     };
-    let ironsift = ironsift_health(&pool.postgres).await;
     let integrations = fetch_integrations_health(
         &pool.postgres,
         settings,
@@ -144,7 +133,6 @@ pub async fn fetch_health_detail(
     Ok(HealthDetail {
         postgres: pg,
         clickhouse: ch,
-        ironsift,
         alerting_rules,
         failed_rules_24h,
         pending_ingest_jobs,
@@ -284,65 +272,6 @@ async fn postgres_health(pool: &PgPool) -> anyhow::Result<ComponentHealth> {
         status: "up",
         detail: None,
     })
-}
-
-async fn ironsift_health(pool: &PgPool) -> IronSiftHealth {
-    let tables_ok = sqlx::query_scalar::<_, i32>(
-        "SELECT COUNT(*)::int FROM information_schema.tables \
-         WHERE table_schema = 'public' AND table_name IN ('ironsift_runs', 'ironsift_findings')",
-    )
-    .fetch_one(pool)
-    .await
-    .unwrap_or(0)
-        >= 2;
-
-    if !tables_ok {
-        return IronSiftHealth {
-            status: "down",
-            detail: Some("migrations missing (ironsift_runs)".into()),
-            enabled: false,
-            total_runs: 0,
-            anomark_models: 0,
-        };
-    }
-
-    let config: Option<serde_json::Value> =
-        sqlx::query_scalar("SELECT value FROM siem_settings WHERE key = 'ironsift_config'")
-            .fetch_optional(pool)
-            .await
-            .ok()
-            .flatten();
-    let enabled = config
-        .as_ref()
-        .and_then(|v| v.get("enabled"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
-
-    let total_runs: i64 = sqlx::query_scalar("SELECT COUNT(*)::bigint FROM ironsift_runs")
-        .fetch_one(pool)
-        .await
-        .unwrap_or(0);
-
-    let anomark_models: i64 =
-        sqlx::query_scalar("SELECT COUNT(*)::bigint FROM ironsift_anomark_trains")
-            .fetch_one(pool)
-            .await
-            .unwrap_or(0);
-
-    let status = if enabled { "up" } else { "disabled" };
-    let detail = if enabled {
-        Some(format!("{total_runs} runs · {anomark_models} AnoMark models"))
-    } else {
-        Some("disabled in settings".into())
-    };
-
-    IronSiftHealth {
-        status,
-        detail,
-        enabled,
-        total_runs,
-        anomark_models,
-    }
 }
 
 async fn clickhouse_health(config: &AppConfig) -> anyhow::Result<ComponentHealth> {

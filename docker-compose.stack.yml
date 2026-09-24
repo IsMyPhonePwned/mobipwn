@@ -39,6 +39,7 @@ x-rust-build: &rust-build
     NO_PROXY: ${NO_PROXY:-}
     BUGREPORT_EXTRACTOR_REPO: ${BUGREPORT_EXTRACTOR_REPO:-https://github.com/ismyphonepwned/bugreport-extractor-library.git}
     SYSDIAGNOSE_EXTRACTOR_REPO: ${SYSDIAGNOSE_EXTRACTOR_REPO:-https://github.com/ismyphonepwned/sysdiagnose-extractor-library.git}
+    FAKEMUSTACHE_REPO: ${FAKEMUSTACHE_REPO:-https://github.com/ismyphonepwned/fakeMustache.git}
     MOBIPWN_EXTRACTOR_REF: ${MOBIPWN_EXTRACTOR_REF:-}
     MOBIPWN_DISABLE_BUILD_PROXY: ${MOBIPWN_DISABLE_BUILD_PROXY:-0}
     MOBIPWN_CARGO_INSECURE_SSL: ${MOBIPWN_CARGO_INSECURE_SSL:-0}

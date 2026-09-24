@@ -4,7 +4,6 @@ import {
   ALERT_TO_SIEM_PLUGIN_ID,
   CASE_COMPARISON_PLUGIN_ID,
   COLLECTOR_PLUGIN_ID,
-  IRONSIFT_PLUGIN_ID,
   type PluginInfo,
 } from "@/lib/plugins";
 
@@ -15,10 +14,6 @@ export type PluginNavMeta = {
 
 /** Sidebar icon + i18n label for each integrated plugin. */
 export const PLUGIN_NAV: Record<string, PluginNavMeta> = {
-  [IRONSIFT_PLUGIN_ID]: {
-    labelKey: "nav.ironsift",
-    icon: ScanSearch,
-  },
   [CASE_COMPARISON_PLUGIN_ID]: {
     labelKey: "nav.caseComparison",
     icon: GitCompare,

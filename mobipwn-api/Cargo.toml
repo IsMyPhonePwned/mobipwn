@@ -18,7 +18,6 @@ logarchive-decode = ["mobipwn-ingest/logarchive-decode"]
 mobipwn-core = { workspace = true }
 mobipwn-search = { workspace = true }
 mobipwn-ingest = { workspace = true }
-mobipwn-ironsift = { workspace = true }
 sha2 = { workspace = true }
 tokio = { workspace = true }
 axum = { workspace = true }

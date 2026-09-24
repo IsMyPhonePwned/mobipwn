@@ -80,9 +80,6 @@ pub async fn list_rule_versions(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Vec<RuleVersion>>, (StatusCode, String)> {
-    if mobipwn_ironsift::is_system_rule_id(&id) {
-        return Err((StatusCode::NOT_FOUND, "rule not found".into()));
-    }
     state
         .rules
         .versions()
@@ -180,9 +177,6 @@ pub async fn mute_rule(
     Path(id): Path<Uuid>,
     Json(body): Json<MuteRuleRequest>,
 ) -> Result<Json<DetectionRule>, (StatusCode, String)> {
-    if mobipwn_ironsift::is_system_rule_id(&id) {
-        return Err((StatusCode::NOT_FOUND, "rule not found".into()));
-    }
     let until = if let Some(iso) = body.muted_until.as_deref() {
         Some(
             chrono::DateTime::parse_from_rfc3339(iso)
@@ -217,9 +211,6 @@ pub async fn set_rule_enabled(
     Path(id): Path<Uuid>,
     Json(body): Json<SetRuleEnabledRequest>,
 ) -> Result<Json<DetectionRule>, (StatusCode, String)> {
-    if mobipwn_ironsift::is_system_rule_id(&id) {
-        return Err((StatusCode::NOT_FOUND, "rule not found".into()));
-    }
     let rule = state
         .rules
         .set_enabled(id, body.enabled)

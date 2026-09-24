@@ -192,11 +192,6 @@ export default function CaseDetailPage() {
             <Button variant="secondary" asChild>
               <Link to={`/alerts?case_id=${caseRec.id}`}>Alerts ({alerts.length})</Link>
             </Button>
-            {caseRec.ingest_source && casePlatform === "endpoint" && (
-              <Button variant="secondary" asChild>
-                <Link to="/ironsift">IronSift</Link>
-              </Button>
-            )}
             {caseRec.status !== "closed" && (
               <Button
                 variant="secondary"
@@ -218,7 +213,7 @@ export default function CaseDetailPage() {
               disabled={actionBusy}
               onClick={() => {
                 const msg = caseRec.ingest_source
-                  ? "Delete this case and all ingested events, IronSift runs, and ingest jobs for this source?"
+                  ? "Delete this case and all ingested events and ingest jobs for this source?"
                   : "Delete this case?";
                 if (!window.confirm(msg)) return;
                 setActionBusy(true);

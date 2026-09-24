@@ -273,7 +273,7 @@ fn pick_str(line: &Value, keys: &[&str]) -> String {
     String::new()
 }
 
-/// Build a display message — required for MUDM. IronSift Sigma JSONL often omits `message`.
+/// Build a display message — required for MUDM. Sigma JSONL often omits `message`.
 fn synthesize_message(line: &Value) -> Option<String> {
     if let Some(m) = line.get("message").and_then(|v| v.as_str()) {
         let m = m.trim();
@@ -595,7 +595,7 @@ mod tests {
     }
 
     #[test]
-    fn normalizes_ironsift_file_information_row() {
+    fn normalizes_file_information_row() {
         let line = json!({
             "timestamp": "2026-05-03T16:49:55",
             "date": "2025-09-24T00:00:00",
@@ -615,7 +615,7 @@ mod tests {
     }
 
     #[test]
-    fn normalizes_ironsift_process_row() {
+    fn normalizes_process_row() {
         let line = json!({
             "timestamp": "2026-04-27T00:10:05",
             "event_type": "process_creation",

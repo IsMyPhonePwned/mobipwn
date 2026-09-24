@@ -6,9 +6,8 @@ mod scheduler;
 use mobipwn_core::ch::signals::{process_realtime_signals, rollup_prevalence};
 use mobipwn_core::config::AppConfig;
 use mobipwn_core::detection::{drop_materialized_view, sync_materialized_view};
-use mobipwn_ironsift::{run_scheduled_fleet, IronSiftRepository};
 use mobipwn_core::{
-    bootstrap_from_env, effective_app_config, run_migrations, AlertRepository, CaseRepository,
+    bootstrap_from_env, effective_app_config, run_migrations, AlertRepository,
     DetectionRunRepository, ProviderRepository, RuleRepository, SettingsRepository,
     SuppressionRepository,
 };
@@ -36,7 +35,6 @@ async fn main() -> anyhow::Result<()> {
         .connect(&config.postgres_url)
         .await?;
     run_migrations(&pg).await?;
-    mobipwn_ironsift::ensure_system_rules(&pg).await?;
     bootstrap_from_env(&SettingsRepository::new(pg.clone()), &config).await?;
 
     let settings = Arc::new(SettingsRepository::new(pg.clone()));
@@ -49,8 +47,6 @@ async fn main() -> anyhow::Result<()> {
         suppressions: Arc::new(SuppressionRepository::new(pg.clone())),
     };
     let providers = Arc::new(ProviderRepository::new(pg.clone()));
-    let cases = Arc::new(CaseRepository::new(pg.clone()));
-    let ironsift = Arc::new(IronSiftRepository::new(pg.clone()));
 
     let mut detection_sched = DetectionScheduler::new().await?;
     detection_sched.sync(&ctx).await?;
@@ -100,19 +96,6 @@ async fn main() -> anyhow::Result<()> {
         if tick % 10 == 0 {
             if let Err(e) = realtime_mv_sync_tick(&settings, &config, &ctx.rules).await {
                 warn!(error = %e, "realtime MV sync");
-            }
-        }
-        if tick % 1440 == 0 {
-            if let Err(e) = run_scheduled_fleet(
-                &config,
-                &ironsift,
-                &cases,
-                &ctx.alerts,
-                &settings,
-            )
-            .await
-            {
-                warn!(error = %e, "IronSift scheduled fleet run failed");
             }
         }
         tokio::time::sleep(Duration::from_secs(60)).await;

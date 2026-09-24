@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Stage bugreport/sysdiagnose extractor repos into docker/deps/ for image build (avoids git clone when siblings exist).
+# Stage sibling Rust deps into docker/deps/ for image build (avoids git clone when present).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEPS="$ROOT/docker/deps"
 BUGREPORT_SRC="${BUGREPORT_EXTRACTOR_ROOT:-$ROOT/../bugreport-extractor-library}"
 SYSDIAGNOSE_SRC="${SYSDIAGNOSE_EXTRACTOR_ROOT:-$ROOT/../sysdiagnose-extractor-library}"
+FAKEMUSTACHE_SRC="${FAKEMUSTACHE_ROOT:-$ROOT/../fakeMustache}"
 
 mkdir -p "$DEPS"
 
@@ -18,9 +19,14 @@ stage_one() {
   echo "==> staging $name from $src"
   rm -rf "$dest"
   mkdir -p "$dest"
-  # tar preserves symlinks; faster than cp -a for large trees.
-  (cd "$src" && tar cf - .) | (cd "$dest" && tar xf -)
+  # tar preserves symlinks; faster than cp -a for large trees. Skip build artifacts.
+  (cd "$src" && tar cf - \
+    --exclude='./target' \
+    --exclude='./.git' \
+    --exclude='./python/.venv' \
+    .) | (cd "$dest" && tar xf -)
 }
 
 stage_one bugreport-extractor-library "$BUGREPORT_SRC"
 stage_one sysdiagnose-extractor-library "$SYSDIAGNOSE_SRC"
+stage_one fakeMustache "$FAKEMUSTACHE_SRC"

@@ -21,9 +21,7 @@ export type Permission =
   | "data_admin"
   | "health_read"
   | "notifications_write"
-  | "llm_use"
-  | "ironsift_read"
-  | "ironsift_write";
+  | "llm_use";
 
 const ANALYST: Permission[] = [
   "search_run",
@@ -42,8 +40,6 @@ const ANALYST: Permission[] = [
   "marketplace_write",
   "health_read",
   "llm_use",
-  "ironsift_read",
-  "ironsift_write",
 ];
 
 const VIEWER: Permission[] = [
@@ -55,7 +51,6 @@ const VIEWER: Permission[] = [
   "dashboards_read",
   "marketplace_read",
   "health_read",
-  "ironsift_read",
 ];
 
 const ROLE_FALLBACK: Record<string, Permission[]> = {
@@ -106,7 +101,6 @@ export const ROUTE_PERMISSIONS: Record<string, Permission | undefined> = {
   "/data": "search_run",
   "/mudm": "search_run",
   "/marketplace": "marketplace_read",
-  "/ironsift": "ironsift_read",
   "/collector": "ingest_write",
   "/case-comparison": "cases_read",
   "/bugreport-comparison": "cases_read",

@@ -30,6 +30,22 @@ export type IngestUploadOptions = {
     max_entry_mb?: number;
     ioservice_full_tree?: boolean;
   };
+  /** Run fakeMustache before parse (pseudonymize identifiers in indexed events). */
+  anonymize?: {
+    enabled: boolean;
+    profile?: "balanced" | "strict" | "research";
+    logarchive?: "drop" | "jsonl";
+    ordinal?: boolean;
+    keep_location?: boolean;
+    keep_cell_ids?: boolean;
+    generalize_carrier?: boolean;
+    drop_carrier?: boolean;
+    pseudo_third_party_packages?: boolean;
+    time_shift?: string;
+    only?: string;
+    entities?: string[];
+    drop_text_from_packages?: string[];
+  };
   onProgress?: (progress: IngestProgress) => void;
 };
 
@@ -135,7 +151,7 @@ export async function uploadIngestArchive(opts: IngestUploadOptions): Promise<{
   jobId: string;
   deduplicated: boolean;
 }> {
-  const { source, platform, user, tags, file, sysdiagnose, onProgress } = opts;
+  const { source, platform, user, tags, file, sysdiagnose, anonymize, onProgress } = opts;
   const started = performance.now();
   let fileHash = "";
 
@@ -169,6 +185,27 @@ export async function uploadIngestArchive(opts: IngestUploadOptions): Promise<{
         file_size: file.size,
         file_hash: fileHash,
         ...(platform === "ios" && sysdiagnose ? { sysdiagnose } : {}),
+        ...(anonymize?.enabled
+          ? {
+              anonymize: {
+                enabled: true,
+                profile: anonymize.profile ?? "balanced",
+                logarchive: anonymize.logarchive ?? "drop",
+                ordinal: anonymize.ordinal ?? false,
+                keep_location: anonymize.keep_location ?? false,
+                keep_cell_ids: anonymize.keep_cell_ids ?? false,
+                generalize_carrier: anonymize.generalize_carrier ?? false,
+                drop_carrier: anonymize.drop_carrier ?? false,
+                pseudo_third_party_packages: anonymize.pseudo_third_party_packages ?? false,
+                ...(anonymize.time_shift ? { time_shift: anonymize.time_shift } : {}),
+                ...(anonymize.only ? { only: anonymize.only } : {}),
+                ...(anonymize.entities?.length ? { entities: anonymize.entities } : {}),
+                ...(anonymize.drop_text_from_packages?.length
+                  ? { drop_text_from_packages: anonymize.drop_text_from_packages }
+                  : {}),
+              },
+            }
+          : {}),
       }),
     });
     const init = await parseApiResponse<UploadInitResponse>(initRes);

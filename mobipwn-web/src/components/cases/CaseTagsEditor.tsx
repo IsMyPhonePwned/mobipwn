@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useLocale } from "@/contexts/LocaleContext";
 import { parseCaseTagInput, patchCaseTags } from "@/lib/cases";
-import { parseIronSiftError } from "@/lib/ironsiftActivity";
+import { parseApiError } from "@/lib/response";
 
 export function CaseTagsEditor({
   caseId,
@@ -37,7 +37,7 @@ export function CaseTagsEditor({
       setInput("");
       onSuccess?.();
     } catch (e) {
-      const msg = parseIronSiftError(e);
+      const msg = parseApiError(e);
       setError(msg);
       onError?.(msg);
     } finally {
@@ -53,7 +53,7 @@ export function CaseTagsEditor({
       onUpdated(updated.tags);
       onSuccess?.();
     } catch (e) {
-      const msg = parseIronSiftError(e);
+      const msg = parseApiError(e);
       setError(msg);
       onError?.(msg);
     } finally {

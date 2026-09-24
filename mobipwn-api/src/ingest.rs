@@ -13,9 +13,10 @@ use mobipwn_core::{CollectBlob, IngestJob, NewCollectBlob};
 use mobipwn_core::mudm::MudmEvent;
 use mobipwn_core::store::{IngestJobOptions, IngestJobProgress};
 use mobipwn_ingest::{
-    insert_events_with_progress, parse_android_bugreport, parse_ios_sysdiagnose,
-    sysdiagnose_archive_options_from_config, sysdiagnose_parse_options_from_config,
-    BugreportParseReport, SysdiagnoseParseReport, SysdiagnoseProgressFn,
+    anonymize_archive_file, insert_events_with_progress, parse_android_bugreport,
+    parse_ios_sysdiagnose, sysdiagnose_archive_options_from_config,
+    sysdiagnose_parse_options_from_config, AnonymizeIngestOptions, BugreportParseReport,
+    SysdiagnoseParseReport, SysdiagnoseProgressFn,
 };
 use std::sync::Arc;
 use serde::{Deserialize, Serialize};
@@ -39,6 +40,9 @@ pub struct UploadInitRequest {
     /// Per-upload iOS sysdiagnose options (overrides Settings for this job only).
     #[serde(default)]
     pub sysdiagnose: Option<mobipwn_core::SysdiagnoseIngestOverrides>,
+    /// Run fakeMustache on the archive before parse (pseudonymize identifiers in indexed events).
+    #[serde(default)]
+    pub anonymize: Option<AnonymizeIngestOptions>,
 }
 
 #[derive(Serialize)]
@@ -173,6 +177,38 @@ fn sysdiagnose_options_path(job_id: Uuid) -> PathBuf {
     upload_dir()
         .join(job_id.to_string())
         .join("sysdiagnose_options.json")
+}
+
+fn anonymize_options_path(job_id: Uuid) -> PathBuf {
+    upload_dir()
+        .join(job_id.to_string())
+        .join("anonymize_options.json")
+}
+
+fn write_anonymize_options(
+    job_id: Uuid,
+    opts: Option<&AnonymizeIngestOptions>,
+) -> Result<(), String> {
+    let path = anonymize_options_path(job_id);
+    match opts {
+        Some(o) if o.enabled => {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+            let bytes = serde_json::to_vec(o).map_err(|e| e.to_string())?;
+            std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+        }
+        _ => {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+    Ok(())
+}
+
+fn load_anonymize_options(job_id: Option<Uuid>) -> Option<AnonymizeIngestOptions> {
+    let id = job_id?;
+    let bytes = std::fs::read(anonymize_options_path(id)).ok()?;
+    serde_json::from_slice(&bytes).ok()
 }
 
 fn write_sysdiagnose_options(
@@ -337,6 +373,8 @@ pub async fn init_upload(
         write_sysdiagnose_options(job.id, body.sysdiagnose.as_ref())
             .map_err(|e| api_error(StatusCode::INTERNAL_SERVER_ERROR, e))?;
     }
+    write_anonymize_options(job.id, body.anonymize.as_ref())
+        .map_err(|e| api_error(StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
     tracing::info!(
         job_id = %job.id,
@@ -346,6 +384,7 @@ pub async fn init_upload(
         file_size = body.file_size,
         file_hash = %&body.file_hash[..12.min(body.file_hash.len())],
         user = user.unwrap_or(""),
+        anonymize = body.anonymize.as_ref().map(|a| a.enabled).unwrap_or(false),
         "ingest upload initiated"
     );
 
@@ -688,7 +727,38 @@ fn spawn_process_job(state: AppState, job_id: Uuid) {
 
         let _ = state.ingest_jobs.mark_running(job_id).await;
         let user = job.case_user.as_deref();
-        let ingest_tags = job.ingest_tags.clone();
+        let mut ingest_tags = job.ingest_tags.clone();
+
+        if let Some(anon) = load_anonymize_options(Some(job_id)).filter(|o| o.enabled) {
+            set_job_stage(
+                &state,
+                Some(job_id),
+                "anonymizing",
+                &format!("fakeMustache ({})…", anon.profile),
+                None,
+            )
+            .await;
+            match anonymize_archive_file(FsPath::new(&path), &anon) {
+                Ok(profile) => {
+                    let tag = format!("anonymized:{profile}");
+                    if !ingest_tags.iter().any(|t| t == &tag || t == "anonymized") {
+                        ingest_tags.push("anonymized".into());
+                        ingest_tags.push(tag);
+                    }
+                    tracing::info!(job_id = %job_id, %profile, "archive anonymized before parse");
+                }
+                Err(e) => {
+                    let msg = format!("fakeMustache anonymize failed: {e}");
+                    let _ = state
+                        .ingest_jobs
+                        .finish(job_id, 0, Some(&msg), None)
+                        .await;
+                    tracing::error!(job_id = %job_id, error = %e, "anonymize failed");
+                    return;
+                }
+            }
+        }
+
         persist_collect_archive(
             &state,
             FsPath::new(&path),
@@ -827,10 +897,16 @@ fn logarchive_decode_status(events: &[MudmEvent]) -> Option<String> {
     }
 }
 
-fn android_ingest_options(report: &BugreportParseReport) -> IngestJobOptions {
+fn android_ingest_options(
+    report: &BugreportParseReport,
+    job_id: Option<Uuid>,
+) -> IngestJobOptions {
     IngestJobOptions {
         build_features: ingest_build_features_vec(),
         magpie: Some(report.magpie_events() > 0),
+        anonymize_profile: load_anonymize_options(job_id)
+            .filter(|o| o.enabled)
+            .map(|o| o.profile),
         ..Default::default()
     }
 }
@@ -838,6 +914,7 @@ fn android_ingest_options(report: &BugreportParseReport) -> IngestJobOptions {
 fn ios_ingest_options(
     cfg: &mobipwn_core::SysdiagnoseIngestConfig,
     events: &[MudmEvent],
+    job_id: Option<Uuid>,
 ) -> IngestJobOptions {
     IngestJobOptions {
         build_features: ingest_build_features_vec(),
@@ -846,6 +923,9 @@ fn ios_ingest_options(
         ioservice_full_tree: Some(cfg.ioservice_full_tree),
         logarchive_uncapped: Some(cfg.logarchive_uncapped),
         max_entry_mb: Some(cfg.max_entry_mb),
+        anonymize_profile: load_anonymize_options(job_id)
+            .filter(|o| o.enabled)
+            .map(|o| o.profile),
         ..Default::default()
     }
 }
@@ -883,7 +963,7 @@ async fn process_archive_at_path(
             report.log_tracing();
             let progress = progress_with_options(
                 report.ingest_progress(),
-                android_ingest_options(&report),
+                android_ingest_options(&report, job_id),
             );
             final_progress = Some(progress.clone());
             set_job_stage(
@@ -996,7 +1076,7 @@ async fn process_archive_at_path(
             report.log_tracing();
             let progress = progress_with_options(
                 report.ingest_progress(),
-                ios_ingest_options(&ingest_cfg, &events),
+                ios_ingest_options(&ingest_cfg, &events, job_id),
             );
             final_progress = Some(progress.clone());
             set_job_stage(
@@ -1081,7 +1161,6 @@ async fn process_archive_at_path(
         user = user.unwrap_or(""),
         "ingest events inserted into ClickHouse"
     );
-    crate::ironsift_hook::after_ingest(state, source, platform).await;
     crate::detection_hook::spawn_after_ingest_detections(state, source);
     Ok((n, final_progress))
 }
