@@ -40,7 +40,6 @@ flowchart TB
   subgraph compute["Compute"]
     SEARCH["mobipwn-search"]
     JOBS["mobipwn-jobs"]
-    IRON["mobipwn-ironsift"]
   end
 
   subgraph ui["Interfaces"]
@@ -56,7 +55,6 @@ flowchart TB
   PG --> SEARCH
   SEARCH --> JOBS
   JOBS --> PG & CH
-  IRON --> PG & CH
   API --> WEB
   MCP & DAC --> API
 ```
@@ -134,12 +132,11 @@ Tracked in Postgres `ingest_jobs.stage` / `stage_detail`:
 | 5 | **Normalize** | `mobipwn-core` MUDM | Promoted columns + `ext` JSON; `apply_bugreport_parser_fields` per parser. |
 | 6 | **Index** | ClickHouse | `mobipwn.events` MergeTree, daily partitions. |
 | 7 | **Case link** | Postgres `cases` | `ensure_for_ingest_source`; optional `user=` query param and ingest tags. |
-| 8 | **IronSift** | `mobipwn-ironsift` | Endpoint platform only: temporal diff when a second successful ingest exists for same `source`. |
-| 9 | **Hunt** | `mobipwn-search` | Analyst mPL queries; admission time bounds; `lookup` enrichments at query time. |
-| 10 | **Detect** | `mobipwn-jobs` / API | `execute_detection_rule` → alert upsert (dedup by rule + facets). Staging lifecycle: manual only. |
-| 11 | **Enrich** | Marketplace + jobs | Provider cron → ClickHouse enrichment tables → dictionaries (raw events unchanged). |
-| 12 | **Realtime** | ClickHouse MVs | Filter-only rules → `detection_signals` on insert; jobs promote to alerts ~every 2 min. |
-| 13 | **Triage** | `mobipwn-web` | Alerts, cases, inbox workflow; search links from alert facets. |
+| 8 | **Hunt** | `mobipwn-search` | Analyst mPL queries; admission time bounds; `lookup` enrichments at query time. |
+| 9 | **Detect** | `mobipwn-jobs` / API | `execute_detection_rule` → alert upsert (dedup by rule + facets). Staging lifecycle: manual only. |
+| 10 | **Enrich** | Marketplace + jobs | Provider cron → ClickHouse enrichment tables → dictionaries (raw events unchanged). |
+| 11 | **Realtime** | ClickHouse MVs | Filter-only rules → `detection_signals` on insert; jobs promote to alerts ~every 2 min. |
+| 12 | **Triage** | `mobipwn-web` | Alerts, cases, inbox workflow; search links from alert facets. |
 
 ### What does *not* happen on ingest
 
@@ -177,8 +174,7 @@ Tracked in Postgres `ingest_jobs.stage` / `stage_detail`:
 | **mobipwn-search** | Lib + bin | mPL parser, SQL gen, admission, `run_search`, **`execute_detection_rule`** |
 | **mobipwn-ingest** | Lib + bin | Extractor integration, JSONL, CH batch insert, `import-rules`, CLI |
 | **mobipwn-api** | Binary | Axum REST, OpenAPI, auth, ingest jobs, collect blobs, LLM/MCP integration |
-| **mobipwn-jobs** | Binary | Detection cron, enrichment cron, prevalence, realtime signals, MV sync, IronSift fleet |
-| **mobipwn-ironsift** | Library | Endpoint baselines, temporal anomaly runs (IronSift + anomark) |
+| **mobipwn-jobs** | Binary | Detection cron, enrichment cron, prevalence, realtime signals, MV sync |
 | **mobipwn-dac** | Binary | GitOps deploy rules/queries from `examples/mobipwn-queries` |
 | **mobipwn-mcp** | Binary | MCP server for external LLM agents ([MCP.md](./MCP.md)) |
 | **mobipwn-web** | Frontend | React UI (not in Cargo workspace) |
@@ -234,7 +230,6 @@ Two layers:
 | Every 2 ticks (~2 min) | Reconcile detection + enrichment crons; process realtime signals → alerts |
 | Every 10 ticks (~10 min) | Sync realtime rule materialized views |
 | Every 15 ticks (~15 min) | Field prevalence rollup |
-| Every 1440 ticks (~24 h) | IronSift scheduled fleet run |
 
 Logs: `.dev/jobs.log` (host dev) or `./compose.sh logs mobipwn-jobs`.
 

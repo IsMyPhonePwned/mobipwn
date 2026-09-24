@@ -25,7 +25,7 @@ export function CollectorTabBar({
 }) {
   const { t } = useLocale();
   return (
-    <nav className="ironsift-tabs collector-tabs" role="tablist" aria-label="Collector">
+    <nav className="app-tabs collector-tabs" role="tablist" aria-label="Collector">
       {TAB_ORDER.map((id) => (
         <button
           key={id}
@@ -33,10 +33,10 @@ export function CollectorTabBar({
           role="tab"
           data-tab={id}
           aria-selected={active === id}
-          className={`ironsift-tab collector-tab${active === id ? " ironsift-tab--active" : ""}`}
+          className={`app-tab collector-tab${active === id ? " app-tab--active" : ""}`}
           onClick={() => onChange(id)}
         >
-          <span className="ironsift-tab__icon" aria-hidden>
+          <span className="app-tab__icon" aria-hidden>
             {TAB_ICONS[id]}
           </span>
           {t(TAB_LABELS[id])}

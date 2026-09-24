@@ -107,7 +107,7 @@ Validate with `POST /v1/rules/validate-query` before enabling.
 - **Prefer column fields** from MUDM; ext-promoted names (`installer`, `destination_domain`) still work in mPL.
 - **Check admission** — very broad queries may require `last 24h` or a `source=` / IoC filter (Settings → search limits).
 - **Field cardinality** — `stats count by` on high-cardinality fields can be slow; scope with `source=` first.
-- **IronSift** uses `platform="endpoint"` JSONL — different schema; say so in the prompt if hunting endpoint telemetry.
+- **Endpoint telemetry** uses `platform="endpoint"` JSONL — different schema; say so in the prompt if hunting it.
 
 ## What’s next
 

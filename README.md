@@ -62,7 +62,6 @@ flowchart TB
   subgraph compute["Compute"]
     SEARCH["mobipwn-search<br/>mPL → SQL · detections"]
     JOBS["mobipwn-jobs<br/>cron · enrichment · rollup"]
-    IRON["mobipwn-ironsift<br/>endpoint baselines"]
   end
 
   subgraph ui["Interfaces"]
@@ -88,7 +87,6 @@ flowchart TB
   SEARCH --> JOBS
   JOBS --> PG
   JOBS --> CH
-  IRON --> PG & CH
 
   API --> WEB
   SEARCH --> API
@@ -155,7 +153,6 @@ sequenceDiagram
 | **8. Detect** | `mobipwn-jobs` + API | Per-rule cron → `execute_detection_rule` → hits become Postgres `alerts` (deduped by rule + facets). Staging rules: **Run now** only. |
 | **9. Enrich** | Jobs + Marketplace | Provider cron syncs IoCs into ClickHouse tables/dictionaries (not mutating raw events). |
 | **10. Realtime** | ClickHouse MVs | Filter-only rules can write `detection_signals` on insert; jobs promote to alerts every ~2 min. |
-| **11. Endpoint extras** | `mobipwn-ironsift` | On endpoint re-ingest: temporal diff vs prior job; scheduled fleet baselines (daily tick). |
 
 Collector **store-only** blobs (`POST /v1/collect/blobs`, `analyzed=false`) skip parse until **re-ingest** from the blob library.
 
@@ -164,7 +161,7 @@ Collector **store-only** blobs (`POST /v1/collect/blobs`, `analyzed=false`) skip
 | Process | Default bind | Role |
 |---------|--------------|------|
 | **mobipwn-api** | `:3000` (`:5174` in `./dev.sh`) | REST, Swagger, ingest, search, rules, alerts, collect |
-| **mobipwn-jobs** | — | Per-rule detection cron, per-provider enrichment cron, prevalence rollup, realtime signals, IronSift fleet |
+| **mobipwn-jobs** | — | Per-rule detection cron, per-provider enrichment cron, prevalence rollup, realtime signals |
 | **mobipwn-web** | `:5173` dev / `:8080` compose | React SPA (`/api` → API) |
 | **mobipwn-search** | `:3002` | Optional standalone search (API embeds same libs) |
 | **Postgres** | `:5432` | Metadata; `migrations/001_schema.sql` on API/jobs startup |
@@ -180,8 +177,7 @@ Shared detection execution: **`mobipwn-search::execute_detection_rule`** (API **
 | **mobipwn-search** | Library + bin | mPL parser, ClickHouse SQL generator, query admission, `run_search`, **`execute_detection_rule`** (hits → alert upsert) |
 | **mobipwn-ingest** | Library + bin | Bugreport/sysdiagnose via extractor libs, JSONL import, batched CH insert, Amnesty `import-rules`, CLI `mobipwn-ingest` |
 | **mobipwn-api** | Binary | Axum REST + OpenAPI (`/swagger-ui`), auth, ingest jobs, collect blobs, LLM/MCP hooks |
-| **mobipwn-jobs** | Binary | Background scheduler: detection cron, enrichment cron, prevalence, realtime MV sync, IronSift fleet |
-| **mobipwn-ironsift** | Library | Endpoint telemetry baselines & temporal anomaly runs (IronSift + anomark integration) |
+| **mobipwn-jobs** | Binary | Background scheduler: detection cron, enrichment cron, prevalence, realtime MV sync |
 | **mobipwn-dac** | Binary | GitOps CLI — deploy detection rules and saved queries from `examples/mobipwn-queries` to the API |
 | **mobipwn-mcp** | Binary | MCP server for Cursor/Claude — search, triage, rules over stdio ([docs/MCP.md](docs/MCP.md)) |
 | **mobipwn-web** | Frontend | React + Vite SPA: Search, Data, Detections, Alerts, Cases/Inbox, Collector, Marketplace, Settings |
@@ -350,7 +346,7 @@ Single fresh-install migration applied on API/jobs startup via `mobipwn_core::ru
 
 | File | Contents |
 |------|----------|
-| `001_schema.sql` | Full Postgres schema: rules, alerts, cases, ingest (incl. source tombstones), SIEM forward audit log, IronSift, auth, collect blobs, platform settings seeds, bundled detection rules (live) |
+| `001_schema.sql` | Full Postgres schema: rules, alerts, cases, ingest (incl. source tombstones), SIEM forward audit log, auth, collect blobs, platform settings seeds, bundled detection rules (live) |
 
 Wipe Postgres volumes when consolidating or resetting (`./scripts/dev.sh` clean / compose `--clean`) so sqlx history matches this single migration.
 
@@ -602,7 +598,6 @@ The main loop ticks every **60s** and also runs:
 | ~2 min | Process realtime `detection_signals` → alert upsert |
 | ~10 min | Sync realtime rule materialized views |
 | ~15 min | Field prevalence rollup into ClickHouse |
-| ~24 h | IronSift scheduled fleet baselines |
 
 Logs: `.dev/jobs.log` (host dev) or `./compose.sh logs mobipwn-jobs`.
 
