@@ -15,10 +15,10 @@ ARG SYSDIAGNOSE_EXTRACTOR_REPO=https://github.com/ismyphonepwned/sysdiagnose-ext
 ARG FAKEMUSTACHE_REPO=https://github.com/ismyphonepwned/fakeMustache.git
 ARG MOBIPWN_EXTRACTOR_REF
 ARG MOBIPWN_DISABLE_BUILD_PROXY
-ARG MOBIPWN_CARGO_INSECURE_SSL
-ARG CARGO_HTTP_CHECK_REVOKE
-ARG GIT_SSL_NO_VERIFY
+ARG MOBIPWN_CARGO_INSECURE_SSL=0
 
+# Never ENV empty CARGO_HTTP_CHECK_REVOKE — cargo requires true|false if the var is set.
+# Insecure SSL is driven only by MOBIPWN_CARGO_INSECURE_SSL (see docs/PROXY.md).
 ENV HTTP_PROXY=$HTTP_PROXY \
     HTTPS_PROXY=$HTTPS_PROXY \
     NO_PROXY=$NO_PROXY \
@@ -26,11 +26,20 @@ ENV HTTP_PROXY=$HTTP_PROXY \
     https_proxy=$HTTPS_PROXY \
     no_proxy=$NO_PROXY \
     CARGO_NET_GIT_FETCH_WITH_CLI=true \
-    CARGO_HTTP_CHECK_REVOKE=${CARGO_HTTP_CHECK_REVOKE} \
-    GIT_SSL_NO_VERIFY=${GIT_SSL_NO_VERIFY}
+    MOBIPWN_CARGO_INSECURE_SSL=${MOBIPWN_CARGO_INSECURE_SSL}
 
 COPY docker/setup-proxy-env.sh /usr/local/bin/setup-proxy-env.sh
 RUN chmod +x /usr/local/bin/setup-proxy-env.sh \
+ && { \
+      echo '#!/bin/sh'; \
+      echo '# Generated at image build — optional cargo/git SSL overrides'; \
+      echo 'unset CARGO_HTTP_CHECK_REVOKE GIT_SSL_NO_VERIFY 2>/dev/null || true'; \
+      if [ "${MOBIPWN_CARGO_INSECURE_SSL:-0}" = "1" ]; then \
+        echo 'export CARGO_HTTP_CHECK_REVOKE=false'; \
+        echo 'export GIT_SSL_NO_VERIFY=true'; \
+      fi; \
+    } > /etc/mobipwn-build-env.sh \
+ && chmod +x /etc/mobipwn-build-env.sh \
  && if [ "${MOBIPWN_DISABLE_BUILD_PROXY:-0}" != "1" ]; then \
       HTTP_PROXY="${HTTP_PROXY:-}" HTTPS_PROXY="${HTTPS_PROXY:-}" NO_PROXY="${NO_PROXY:-}" \
         /usr/local/bin/setup-proxy-env.sh; \
@@ -47,6 +56,7 @@ RUN chmod +x /usr/local/bin/setup-proxy-env.sh \
 COPY docker/clone-extractors.sh /tmp/clone-extractors.sh
 COPY docker/deps /tmp/docker-deps
 RUN chmod +x /tmp/clone-extractors.sh \
+ && . /etc/mobipwn-build-env.sh \
  && if [ -f /tmp/docker-deps/bugreport-extractor-library/Cargo.toml ]; then \
       cp -a /tmp/docker-deps/bugreport-extractor-library /bugreport-extractor-library; \
     fi \
@@ -74,14 +84,17 @@ COPY mobipwn-api mobipwn-api
 COPY mobipwn-jobs mobipwn-jobs
 COPY migrations migrations
 
-FROM rust-base AS rust-builder-api
-RUN cargo build --release -p mobipwn-api
-
-FROM rust-base AS rust-builder-jobs
-RUN cargo build --release -p mobipwn-jobs
+FROM rust-base AS rust-builder
+# Build api+jobs together so heavy crates (wasmtime/cranelift) compile once.
+# Cap parallelism to avoid OOM when Docker Desktop memory is limited.
+ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS:-2}
+RUN env -u CARGO_HTTP_CHECK_REVOKE -u GIT_SSL_NO_VERIFY \
+      sh -c '. /etc/mobipwn-build-env.sh && cargo build --release -p mobipwn-api -p mobipwn-jobs'
 
 FROM rust-base AS rust-builder-search
-RUN cargo build --release -p mobipwn-search
+ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS:-2}
+RUN env -u CARGO_HTTP_CHECK_REVOKE -u GIT_SSL_NO_VERIFY \
+      sh -c '. /etc/mobipwn-build-env.sh && cargo build --release -p mobipwn-search'
 
 FROM debian:bookworm-slim AS mobipwn-api
 ARG HTTP_PROXY
@@ -104,7 +117,7 @@ RUN chmod +x /usr/local/bin/setup-proxy-env.sh \
  && rm -rf /var/lib/apt/lists/*
 ENV HTTP_PROXY=${HTTP_PROXY:-} HTTPS_PROXY=${HTTPS_PROXY:-} NO_PROXY=${NO_PROXY:-} \
     http_proxy=${HTTP_PROXY:-} https_proxy=${HTTPS_PROXY:-} no_proxy=${NO_PROXY:-}
-COPY --from=rust-builder-api /app/target/release/mobipwn-api /usr/local/bin/
+COPY --from=rust-builder /app/target/release/mobipwn-api /usr/local/bin/
 EXPOSE 3000
 CMD ["mobipwn-api"]
 
@@ -129,7 +142,7 @@ RUN chmod +x /usr/local/bin/setup-proxy-env.sh \
  && rm -rf /var/lib/apt/lists/*
 ENV HTTP_PROXY=${HTTP_PROXY:-} HTTPS_PROXY=${HTTPS_PROXY:-} NO_PROXY=${NO_PROXY:-} \
     http_proxy=${HTTP_PROXY:-} https_proxy=${HTTPS_PROXY:-} no_proxy=${NO_PROXY:-}
-COPY --from=rust-builder-jobs /app/target/release/mobipwn-jobs /usr/local/bin/
+COPY --from=rust-builder /app/target/release/mobipwn-jobs /usr/local/bin/
 CMD ["mobipwn-jobs"]
 
 FROM debian:bookworm-slim AS mobipwn-search

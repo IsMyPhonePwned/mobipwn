@@ -17,10 +17,14 @@ ENV HTTP_PROXY=$HTTP_PROXY \
     RUSTY_MAGPIE_PREBUILT_URL=$RUSTY_MAGPIE_PREBUILT_URL
 WORKDIR /app/mobipwn-web
 COPY mobipwn-web/package.json mobipwn-web/package-lock.json ./
-RUN npm ci
+# postinstall runs ensure-tailwind-oxide.sh (needs bash + script on disk)
+COPY scripts/ensure-tailwind-oxide.sh /app/scripts/
+RUN apk add --no-cache bash \
+    && chmod +x /app/scripts/ensure-tailwind-oxide.sh \
+    && npm ci
 COPY mobipwn-web/ ./
 COPY scripts/ensure-rusty-magpie.sh scripts/fetch-rusty-magpie.sh /app/scripts/
-RUN apk add --no-cache bash curl file python3 \
+RUN apk add --no-cache curl file python3 \
     && chmod +x /app/scripts/ensure-rusty-magpie.sh /app/scripts/fetch-rusty-magpie.sh \
     && /app/scripts/ensure-rusty-magpie.sh || true
 RUN npm run build

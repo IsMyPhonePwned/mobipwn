@@ -324,7 +324,7 @@ export default function AlertsPage() {
     } else if (updated === 0) {
       setError(`No alerts were updated to ${status}`);
     } else {
-      setError(null);
+      setError("");
     }
     setSelected(new Set());
     await load();

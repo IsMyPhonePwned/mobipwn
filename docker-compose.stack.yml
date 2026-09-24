@@ -43,8 +43,8 @@ x-rust-build: &rust-build
     MOBIPWN_EXTRACTOR_REF: ${MOBIPWN_EXTRACTOR_REF:-}
     MOBIPWN_DISABLE_BUILD_PROXY: ${MOBIPWN_DISABLE_BUILD_PROXY:-0}
     MOBIPWN_CARGO_INSECURE_SSL: ${MOBIPWN_CARGO_INSECURE_SSL:-0}
-    CARGO_HTTP_CHECK_REVOKE: ${CARGO_HTTP_CHECK_REVOKE:-}
-    GIT_SSL_NO_VERIFY: ${GIT_SSL_NO_VERIFY:-}
+    # Do not pass CARGO_HTTP_CHECK_REVOKE / GIT_SSL_NO_VERIFY as build-args:
+    # empty strings become env vars during RUN and cargo rejects them.
 
 services:
   postgres:

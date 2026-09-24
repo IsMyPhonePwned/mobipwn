@@ -121,7 +121,14 @@ if [[ -n "$PLATFORM" ]]; then
 fi
 
 echo "==> Building images: ${SERVICES[*]} (tag: $TAG)"
-compose_cmd "${build_args[@]}" build "${SERVICES[@]}"
+# Host/shell may have CARGO_HTTP_CHECK_REVOKE="" from compose leftovers; never forward that.
+unset CARGO_HTTP_CHECK_REVOKE GIT_SSL_NO_VERIFY 2>/dev/null || true
+# One service at a time: parallel api+jobs cargo compiles OOMs on typical Docker Desktop RAM.
+# (Avoid `compose build --parallel N` — Compose v1 treats that as a service name.)
+for svc in "${SERVICES[@]}"; do
+  echo "==> Building $svc"
+  compose_cmd "${build_args[@]}" build "$svc"
+done
 
 echo "==> Tagging images"
 declare -a BUILT_IMAGES=()
