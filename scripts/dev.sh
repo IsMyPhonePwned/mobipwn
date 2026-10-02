@@ -220,6 +220,15 @@ cmd_up() {
   fi
 
   echo "==> Docker: Postgres + ClickHouse"
+  # shellcheck disable=SC1091
+  source "$ROOT/scripts/host-ports.sh"
+  mobipwn_resolve_host_ports "$ROOT/.env"
+  # Re-apply env so docker compose sees remapped publish ports.
+  set -a
+  # shellcheck disable=SC1091
+  source "$ROOT/.env"
+  set +a
+  export MOBIPWN_CLICKHOUSE_HTTP_PORT MOBIPWN_CLICKHOUSE_NATIVE_PORT MOBIPWN_CLICKHOUSE_URL
   docker compose up -d postgres clickhouse
   sleep 2
   if ! docker compose ps postgres --status running -q 2>/dev/null | grep -q .; then

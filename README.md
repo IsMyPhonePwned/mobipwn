@@ -224,29 +224,26 @@ On first run, **`.env`** is created from `.env.example`. **Web UI:** http://127.
 **Share images externally** (USB / scp / registry):
 
 ```bash
-./scripts/build-share-image.sh --platform linux/amd64 --tag 1.0.0
-# → dist/share/mobipwn-images-1.0.0.tar.gz
-# On target: ./scripts/load-docker-images.sh ./dist/share && ./compose.sh up --no-build
+# Build machine — one self-contained archive per arch
+./scripts/build-share-image.sh --platform x64 --tag 1.0.0
+# → dist/share/mobipwn-share-1.0.0-amd64.tar.gz
 ```
 
-See [docs/DOCKER_DEPLOY.md](docs/DOCKER_DEPLOY.md).
+**On the target — no git clone:**
+
+```bash
+tar xzf mobipwn-share-1.0.0-amd64.tar.gz
+cd mobipwn-share-1.0.0-amd64
+./run.sh
+# Web UI http://127.0.0.1:8080 · API http://127.0.0.1:3000/health
+# ./status.sh · ./stop.sh
+```
+
+Full steps: [docs/DOCKER_DEPLOY.md §3](docs/DOCKER_DEPLOY.md#3-load-and-run-the-targz-target-machine).
 
 Optional profiles: `./compose.sh up --profile search` (standalone search on :3002), `./compose.sh up --profile ingest` (Vector agent).
 
-**Share images to another machine** (build once, run without compiling on the target): see **[docs/DOCKER_DEPLOY.md](docs/DOCKER_DEPLOY.md)**.
-
-```bash
-# Offline: build machine → tarball → target
-./scripts/build-docker-images.sh --platform linux/amd64 --export ./dist/mobipwn-images
-./scripts/load-docker-images.sh ./dist/mobipwn-images   # on target
-./compose.sh up --no-build
-
-# Public registry: publish then anyone can pull (see docs/DOCKER_DEPLOY.md)
-./scripts/build-docker-images.sh --registry ghcr.io/YOU/mobipwn --tag 1.0.0 --push
-./scripts/pull-docker-images.sh --registry ghcr.io/YOU/mobipwn --tag 1.0.0
-```
-
-Change default passwords and use HTTPS before exposing on the public internet — [docs/DOCKER_DEPLOY.md](docs/DOCKER_DEPLOY.md#public-internet-deployment-expose-the-stack).
+Public registry / internet exposure: [docs/DOCKER_DEPLOY.md](docs/DOCKER_DEPLOY.md).
 
 Uses `docker compose` when available, otherwise `podman compose`. Same as `./scripts/install.sh`.
 

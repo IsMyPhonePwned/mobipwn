@@ -10,10 +10,17 @@ cd "$ROOT"
 source "$ROOT/scripts/compose-lib.sh"
 # shellcheck disable=SC1091
 source "$ROOT/scripts/ensure-env.sh"
+# shellcheck disable=SC1091
+source "$ROOT/scripts/host-ports.sh"
 
 # Export proxy (+ npm/cargo) from .env for compose interpolation and builds.
 load_mobipwn_env "$ROOT"
 apply_cargo_network_config "$ROOT"
+
+# If 8123/9000 (etc.) are taken, remap and persist into .env before compose starts.
+mobipwn_resolve_host_ports "$ROOT/.env" --with-app-ports
+# Re-load so compose interpolation sees the new values.
+load_mobipwn_env "$ROOT"
 
 COMPOSE_FILE="${MOBIPWN_COMPOSE_FILE:-$ROOT/docker-compose.stack.yml}"
 export MOBIPWN_COMPOSE_FILE="$COMPOSE_FILE"

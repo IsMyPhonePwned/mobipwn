@@ -4,7 +4,7 @@ Build MobiPwn application images on one machine and run them on another **withou
 
 | Goal | Section |
 |------|---------|
-| Offline tarball (USB, scp) | [§1 Build and export](#1-build-and-export-build-machine) → [§2 Copy](#2-copy-to-the-target-system) → [§3 Load](#3-load-and-run-target-machine) |
+| Offline tarball (USB, scp) | [§1 Build](#1-build-and-export-build-machine) → [§2 Copy](#2-copy-to-the-target-system) → [§3 Load & run](#3-load-and-run-the-share-archive-target-machine) |
 | Private registry (your servers) | [§ Alternative: container registry](#alternative-container-registry) |
 | **Public registry** (`docker pull` for anyone) | [§ Public registry](#public-registry-anyone-can-docker-pull) |
 | **Expose on the internet** (HTTPS, firewall) | [§ Public internet deployment](#public-internet-deployment-expose-the-stack) |
@@ -67,32 +67,36 @@ From the mobipwn repo root:
 ```bash
 chmod +x scripts/build-docker-images.sh scripts/build-share-image.sh scripts/load-docker-images.sh scripts/pull-docker-images.sh
 
-# Recommended for external share
-./scripts/build-share-image.sh --platform linux/amd64 --tag 1.0.0
+# Recommended for external share (Linux x64 servers)
+./scripts/build-share-image.sh --platform x64 --tag 1.0.0
+
+# Both linux/amd64 (x64) and linux/arm64
+./scripts/build-share-image.sh --all-platforms --tag 1.0.0
 
 # Native platform
 ./scripts/build-docker-images.sh --export ./dist/mobipwn-images
 
-# Cross-build for Linux x86 servers (e.g. from Apple Silicon Mac)
+# Cross-build for Linux x86_64 servers (e.g. from Apple Silicon Mac)
 ./scripts/build-docker-images.sh --platform linux/amd64 --export ./dist/mobipwn-images
 
 # Versioned tag
 ./scripts/build-docker-images.sh --tag 1.0.0 --export ./dist/mobipwn-images
 ```
 
-Output:
+Output (under `./dist/share` when using `build-share-image.sh`):
 
-- `dist/mobipwn-images/mobipwn-images-<tag>.tar.gz` — image bundle
-- `dist/mobipwn-images/README.txt` — load/run notes
+- `mobipwn-share-<tag>-amd64.tar.gz` and/or `mobipwn-share-<tag>-arm64.tar.gz` — **one file** with images + deploy kit
+- `README.txt` — short pointer
 
-Images are saved with **compose-compatible `:latest` tags** (`mobipwn-mobipwn-api:latest`, etc.) so `./compose.sh up --no-build` works after load.
+Each share archive unpacks to a directory containing `run.sh`, `docker-compose.yml`, and the Docker image tarball.
 
 ### Build script options
 
 | Option | Effect |
 |--------|--------|
 | `--export DIR` | Write `.tar.gz` bundle under `DIR` |
-| `--platform PLAT` | e.g. `linux/amd64` for cross-build |
+| `--platform PLAT` | Target platform(s); comma-separated OK. Aliases: `x64`/`amd64` → `linux/amd64`, `arm64` → `linux/arm64` |
+| `--all-platforms` | Build both `linux/amd64` (x64) and `linux/arm64` (separate tarballs) |
 | `--tag TAG` | Tag images (default: `latest`, or `MOBIPWN_IMAGE_TAG` in `.env`) |
 | `--registry REG` | Prefix for push, e.g. `ghcr.io/myorg/mobipwn` |
 | `--push` | Push to `--registry` (requires `docker login`) |
@@ -107,52 +111,80 @@ Sibling extractor / anonymizer libs (`../bugreport-extractor-library`, `../sysdi
 
 ## 2. Copy to the target system
 
-Copy the **image bundle** and enough **repo config** to run the stack.
-
-### Minimum files to copy
-
-- `dist/mobipwn-images/` (the `.tar.gz`)
-- `compose.sh`, `scripts/load-docker-images.sh`, `scripts/compose-lib.sh`, `scripts/ensure-env.sh`, `scripts/ch-migrate.sh`
-- `docker-compose.stack.yml`, `clickhouse/`, `.env.example` (or your configured `.env`)
-
-### Easiest approach
-
-Copy or clone the **whole repo** (or ship a tarball of it) plus `dist/mobipwn-images/`.
+Copy **one** share archive (not a folder):
 
 ```bash
-# Example: scp
-scp -r dist/mobipwn-images user@remote:/opt/mobipwn/dist/
-rsync -av --exclude target --exclude node_modules ./ user@remote:/opt/mobipwn/
+scp dist/share/mobipwn-share-1.0.0-amd64.tar.gz user@remote:/opt/
 ```
 
 ---
 
-## 3. Load and run (target machine)
+## 3. Load and run the share archive (target machine)
 
-Docker or Podman with compose is required on the target.
+**You do not need to clone the MobiPwn git repo.** Transfer one `mobipwn-share-*.tar.gz`, extract it, and run.
+
+**Requirements on the target:** Docker or Podman (+ compose). Network once to pull Postgres + ClickHouse base images.
+
+### Quick start
 
 ```bash
-cd /opt/mobipwn
-
-# First time: configure env (passwords, ports, etc.)
-cp .env.example .env
-# edit .env
-
-./scripts/load-docker-images.sh ./dist/mobipwn-images
-
-# Start without rebuilding — uses loaded images
-./compose.sh up --no-build
+tar xzf mobipwn-share-1.0.0-amd64.tar.gz
+cd mobipwn-share-1.0.0-amd64
+./run.sh
+# → loads Docker images, creates .env, starts the stack
 ```
 
-`--no-build` is important: it skips compile and uses the pre-built images.
-
-On first start, compose will **pull** Postgres and ClickHouse if not already present.
+Then open:
 
 | Service | Default URL |
 |---------|-------------|
 | Web UI | http://127.0.0.1:8080/ |
 | API health | http://127.0.0.1:3000/health |
 | Login | `admin` / value of `MOBIPWN_ADMIN_PASSWORD` in `.env` |
+
+```bash
+./status.sh              # containers + health checks
+./stop.sh                # stop containers (keeps DB volumes)
+./stop.sh --volumes      # stop and wipe DB volumes
+docker compose logs -f   # follow logs
+```
+
+Edit `.env` (created from `.env.example` on first run) before exposing the stack.
+
+If ClickHouse ports **8123** / **9000** (or Postgres/API/web defaults) are already in use on the host, `./run.sh` and `./compose.sh up` automatically remap them to the next free ports and write the values into `.env`.
+
+### What’s inside the share archive
+
+After `tar xzf`, the directory contains:
+
+| File | Role |
+|------|------|
+| `mobipwn-images-<tag>-amd64.tar.gz` | App images (`api`, `jobs`, `web`) |
+| `run.sh` | Load images + start stack (auto-picks free host ports if 8123/9000/… are taken) |
+| `stop.sh` | Stop stack (`--volumes` to wipe DB data) |
+| `status.sh` | Container list + API/web/ClickHouse health |
+| `lib-compose.sh` / `lib-host-ports.sh` | Helpers used by the scripts above |
+| `docker-compose.yml` | Image-only stack (no build) |
+| `.env.example` | Passwords / ports |
+| `clickhouse/` | Schema mount for first DB init |
+| `README.txt` | Short reminder |
+
+Postgres and ClickHouse are **not** in the archive — compose **pulls** them on first `up`.
+
+### Arch tips
+
+| Host CPU | Share archive |
+|----------|----------------|
+| x86_64 / amd64 | `mobipwn-share-<tag>-amd64.tar.gz` |
+| arm64 / aarch64 | `mobipwn-share-<tag>-arm64.tar.gz` |
+
+### Optional: using a full git clone
+
+```bash
+# Extract or copy the inner mobipwn-images-*.tar.gz, then:
+./scripts/load-docker-images.sh ./path/to/mobipwn-images-1.0.0-amd64.tar.gz
+./compose.sh up --no-build
+```
 
 ---
 

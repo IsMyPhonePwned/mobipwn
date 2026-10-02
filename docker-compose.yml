@@ -37,8 +37,8 @@ services:
       https_proxy: ${HTTPS_PROXY:-}
       no_proxy: ${NO_PROXY:-}
     ports:
-      - "8123:8123"
-      - "9000:9000"
+      - "${MOBIPWN_CLICKHOUSE_HTTP_PORT:-8123}:8123"
+      - "${MOBIPWN_CLICKHOUSE_NATIVE_PORT:-9000}:9000"
     volumes:
       - ./clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - ./clickhouse/config.d/dev-low-cpu.xml:/etc/clickhouse-server/config.d/dev-low-cpu.xml:ro

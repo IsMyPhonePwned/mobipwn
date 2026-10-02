@@ -5,6 +5,7 @@
 # Usage:
 #   ./scripts/build-share-image.sh
 #   ./scripts/build-share-image.sh --platform linux/amd64 --tag 1.0.0
+#   ./scripts/build-share-image.sh --all-platforms --tag 1.0.0
 #   ./scripts/build-share-image.sh --registry ghcr.io/YOU/mobipwn --tag 1.0.0 --push
 set -euo pipefail
 
@@ -15,6 +16,7 @@ TAG="${MOBIPWN_IMAGE_TAG:-latest}"
 REGISTRY=""
 EXPORT_DIR="$ROOT/dist/share"
 PLATFORM=""
+ALL_PLATFORMS=0
 PUSH=0
 EXTRA=()
 
@@ -25,7 +27,8 @@ Build MobiPwn Docker images for external use / offline transfer.
 Options (passed through to build-docker-images.sh):
   --tag TAG           Image tag (default: latest)
   --registry REG      Registry prefix for push
-  --platform PLAT     e.g. linux/amd64
+  --platform PLAT     e.g. linux/amd64, amd64, x64, arm64 (comma-separated OK)
+  --all-platforms     Build linux/amd64 (x64) and linux/arm64
   --export DIR        Write .tar.gz under DIR (default: ./dist/share)
   --no-export         Build/tag only; skip tarball
   --push              Push to --registry
@@ -33,9 +36,14 @@ Options (passed through to build-docker-images.sh):
   --no-jobs           Skip mobipwn-jobs
   -h, --help          Show this help
 
-On a target host after copy:
-  ./scripts/load-docker-images.sh ./dist/share
-  ./compose.sh up --no-build
+Examples:
+  ./scripts/build-share-image.sh --platform x64 --tag 1.0.0
+  ./scripts/build-share-image.sh --all-platforms --tag 1.0.0
+
+On the target (one archive — no git clone):
+  tar xzf mobipwn-share-1.0.0-amd64.tar.gz
+  cd mobipwn-share-1.0.0-amd64
+  ./run.sh
 EOF
 }
 
@@ -44,6 +52,7 @@ while [[ $# -gt 0 ]]; do
     --tag) TAG="${2:?}"; shift 2 ;;
     --registry) REGISTRY="${2:?}"; shift 2 ;;
     --platform) PLATFORM="${2:?}"; shift 2 ;;
+    --all-platforms) ALL_PLATFORMS=1; shift ;;
     --export) EXPORT_DIR="${2:?}"; shift 2 ;;
     --no-export) EXPORT_DIR=""; shift ;;
     --push) PUSH=1; shift ;;
@@ -60,6 +69,7 @@ done
 args=(--tag "$TAG")
 [[ -n "$REGISTRY" ]] && args+=(--registry "$REGISTRY")
 [[ -n "$PLATFORM" ]] && args+=(--platform "$PLATFORM")
+[[ "$ALL_PLATFORMS" == 1 ]] && args+=(--all-platforms)
 [[ -n "$EXPORT_DIR" ]] && args+=(--export "$EXPORT_DIR")
 [[ "$PUSH" == 1 ]] && args+=(--push)
 # Bash < 4.4 + set -u treats empty "${EXTRA[@]}" as unbound.
