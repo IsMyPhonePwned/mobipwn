@@ -282,11 +282,11 @@ package_share_archive() {
   mkdir -p "$stage/clickhouse/config.d"
   cp -a "$ROOT/deploy/docker-compose.yml" "$ROOT/deploy/.env.example" \
     "$ROOT/deploy/run.sh" "$ROOT/deploy/stop.sh" "$ROOT/deploy/status.sh" \
-    "$ROOT/deploy/lib-compose.sh" "$stage/"
+    "$ROOT/deploy/check-endpoints.sh" "$ROOT/deploy/lib-compose.sh" "$stage/"
   cp -a "$ROOT/scripts/host-ports.sh" "$stage/lib-host-ports.sh"
   cp -a "$ROOT/clickhouse/init.sql" "$stage/clickhouse/"
   cp -a "$ROOT/clickhouse/config.d/dev-low-cpu.xml" "$stage/clickhouse/config.d/"
-  chmod +x "$stage/run.sh" "$stage/stop.sh" "$stage/status.sh"
+  chmod +x "$stage/run.sh" "$stage/stop.sh" "$stage/status.sh" "$stage/check-endpoints.sh"
   cp -a "$image_bundle" "$stage/$(basename "$image_bundle")"
 
   cat >"$stage/README.txt" <<EOF
@@ -297,9 +297,10 @@ Platform: $plat_label
 Run (no git clone):
   tar xzf ${stage_name}.tar.gz
   cd ${stage_name}
-  ./run.sh       # start
-  ./status.sh    # containers + health
-  ./stop.sh      # stop (keep data)
+  ./run.sh              # start
+  ./status.sh           # containers + health
+  ./check-endpoints.sh  # probe UI + API URLs
+  ./stop.sh             # stop (keep data)
 
 Web UI: http://127.0.0.1:8080/   API: http://127.0.0.1:3000/health
 Postgres + ClickHouse are pulled from Docker Hub on first start.

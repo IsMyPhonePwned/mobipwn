@@ -134,16 +134,20 @@ cd mobipwn-share-1.0.0-amd64
 # → loads Docker images, creates .env, starts the stack
 ```
 
-Then open:
+Then open (browser uses the **web** port; nginx proxies `/api/` to the API):
 
-| Service | Default URL |
-|---------|-------------|
+| Service | URL |
+|---------|-----|
 | Web UI | http://127.0.0.1:8080/ |
-| API health | http://127.0.0.1:3000/health |
+| Public collect | http://127.0.0.1:8080/collect |
+| API health (via UI) | http://127.0.0.1:8080/api/health |
+| API health (direct) | http://127.0.0.1:3000/health |
+| Swagger | http://127.0.0.1:8080/swagger-ui/ |
 | Login | `admin` / value of `MOBIPWN_ADMIN_PASSWORD` in `.env` |
 
 ```bash
 ./status.sh              # containers + health checks
+./check-endpoints.sh     # probe UI + /api/* + public collect
 ./stop.sh                # stop containers (keeps DB volumes)
 ./stop.sh --volumes      # stop and wipe DB volumes
 docker compose logs -f   # follow logs
@@ -163,6 +167,7 @@ After `tar xzf`, the directory contains:
 | `run.sh` | Load images + start stack (auto-picks free host ports if 8123/9000/… are taken) |
 | `stop.sh` | Stop stack (`--volumes` to wipe DB data) |
 | `status.sh` | Container list + API/web/ClickHouse health |
+| `check-endpoints.sh` | HTTP probes for UI, `/api/*`, public `/collect`, Swagger |
 | `lib-compose.sh` / `lib-host-ports.sh` | Helpers used by the scripts above |
 | `docker-compose.yml` | Image-only stack (no build) |
 | `.env.example` | Passwords / ports |
@@ -292,7 +297,7 @@ Default compose binds **8080** (web) and **3000** (API) on the host. For a publi
 
 - Run compose on a private network (bind to `127.0.0.1` only if you edit port mappings).
 - Terminate **HTTPS** with a reverse proxy (Caddy, nginx, Traefik) and restrict access (VPN, SSO, IP allowlist, or basic auth in addition to MobiPwn login).
-- Prefer exposing **only the web port** (8080); keep API on an internal network unless clients need direct API access.
+- Prefer exposing **only the web port** (8080); nginx already proxies `/api/`, `/health`, `/swagger-ui`, and `/api-docs`. Keep **3000** (API), **5432**, **8123**, and **9000** off the public internet unless you need direct API/DB access.
 
 Example: Caddy in front of `mobipwn-web:80` with automatic Let's Encrypt for `mobipwn.example.com`.
 
