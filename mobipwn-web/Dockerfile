@@ -27,6 +27,9 @@ COPY scripts/ensure-rusty-magpie.sh scripts/fetch-rusty-magpie.sh /app/scripts/
 RUN apk add --no-cache curl file python3 \
     && chmod +x /app/scripts/ensure-rusty-magpie.sh /app/scripts/fetch-rusty-magpie.sh \
     && /app/scripts/ensure-rusty-magpie.sh || true
+ARG MOBIPWN_VERSION=dev
+ENV VITE_APP_VERSION=$MOBIPWN_VERSION \
+    MOBIPWN_VERSION=$MOBIPWN_VERSION
 RUN npm run build
 
 FROM nginx:alpine

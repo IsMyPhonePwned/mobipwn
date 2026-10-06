@@ -97,7 +97,7 @@ Each share archive unpacks to a directory containing `run.sh`, `docker-compose.y
 | `--export DIR` | Write `.tar.gz` bundle under `DIR` |
 | `--platform PLAT` | Target platform(s); comma-separated OK. Aliases: `x64`/`amd64` → `linux/amd64`, `arm64` → `linux/arm64` |
 | `--all-platforms` | Build both `linux/amd64` (x64) and `linux/arm64` (separate tarballs) |
-| `--tag TAG` | Tag images (default: `latest`, or `MOBIPWN_IMAGE_TAG` in `.env`) |
+| `--tag TAG` | Tag images **and** bake that value into the UI / `/health` (default: `latest`, or `MOBIPWN_IMAGE_TAG` in `.env`) |
 | `--registry REG` | Prefix for push, e.g. `ghcr.io/myorg/mobipwn` |
 | `--push` | Push to `--registry` (requires `docker login`) |
 | `--with-search` | Also build `mobipwn-search` |

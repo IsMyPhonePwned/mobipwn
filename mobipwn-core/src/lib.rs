@@ -45,7 +45,7 @@ pub use backup::{
     export_backup, import_backup, list_section_info, parse_section_ids, BackupBundle, BackupSection,
     BackupSectionInfo, ImportBackupResult, ImportMode, BACKUP_FORMAT_VERSION,
 };
-pub use config::AppConfig;
+pub use config::{app_version, AppConfig};
 pub use case_audit::{
     emit_case_audit, emit_case_comment, fetch_case_wall, normalize_note_type, CaseAuditAction,
     CaseAuditActor, CaseAuditExtras,

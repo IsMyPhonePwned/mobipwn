@@ -96,6 +96,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 ENGINE="$(compose_engine)"
+export MOBIPWN_VERSION="$TAG"
+echo "==> App version baked into images: $MOBIPWN_VERSION"
 
 normalize_platform() {
   local raw
@@ -283,6 +285,7 @@ package_share_archive() {
   cp -a "$ROOT/deploy/docker-compose.yml" "$ROOT/deploy/.env.example" \
     "$ROOT/deploy/run.sh" "$ROOT/deploy/stop.sh" "$ROOT/deploy/status.sh" \
     "$ROOT/deploy/check-endpoints.sh" "$ROOT/deploy/lib-compose.sh" "$stage/"
+  printf '\nMOBIPWN_VERSION=%s\n' "$TAG" >>"$stage/.env.example"
   cp -a "$ROOT/scripts/host-ports.sh" "$stage/lib-host-ports.sh"
   cp -a "$ROOT/clickhouse/init.sql" "$stage/clickhouse/"
   cp -a "$ROOT/clickhouse/config.d/dev-low-cpu.xml" "$stage/clickhouse/config.d/"

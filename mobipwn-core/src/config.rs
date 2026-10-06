@@ -1,6 +1,15 @@
 use clickhouse::Client;
 use std::time::Duration;
 
+/// Release tag shown in the UI / `/health`. Docker builds set `MOBIPWN_VERSION` from `--tag`.
+pub fn app_version() -> String {
+    std::env::var("MOBIPWN_VERSION")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string())
+}
+
 fn clickhouse_user_from_env() -> Option<String> {
     match std::env::var("MOBIPWN_CLICKHOUSE_USER") {
         Ok(v) if v.is_empty() => None,

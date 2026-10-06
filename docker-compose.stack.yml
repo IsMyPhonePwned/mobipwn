@@ -13,6 +13,7 @@ x-proxy-env: &proxy-env
   no_proxy: ${NO_PROXY:-localhost,127.0.0.1,postgres,clickhouse,mobipwn-api,mobipwn-jobs,mobipwn-web}
 
 x-mobipwn-env: &mobipwn-env
+  MOBIPWN_VERSION: ${MOBIPWN_VERSION:-dev}
   MOBIPWN_CLICKHOUSE_USER: ${MOBIPWN_CLICKHOUSE_USER:-default}
   MOBIPWN_CLICKHOUSE_PASSWORD: ${MOBIPWN_CLICKHOUSE_PASSWORD:-mobipwn}
   MOBIPWN_CLICKHOUSE_DB: ${MOBIPWN_CLICKHOUSE_DB:-mobipwn}
@@ -43,6 +44,7 @@ x-rust-build: &rust-build
     MOBIPWN_EXTRACTOR_REF: ${MOBIPWN_EXTRACTOR_REF:-}
     MOBIPWN_DISABLE_BUILD_PROXY: ${MOBIPWN_DISABLE_BUILD_PROXY:-0}
     MOBIPWN_CARGO_INSECURE_SSL: ${MOBIPWN_CARGO_INSECURE_SSL:-0}
+    MOBIPWN_VERSION: ${MOBIPWN_VERSION:-dev}
     # Do not pass CARGO_HTTP_CHECK_REVOKE / GIT_SSL_NO_VERIFY as build-args:
     # empty strings become env vars during RUN and cargo rejects them.
 
@@ -152,6 +154,7 @@ services:
         NO_PROXY: ${NO_PROXY:-}
         MOBIPWN_RUSTY_MAGPIE_MODE: ${MOBIPWN_RUSTY_MAGPIE_MODE:-fetch}
         RUSTY_MAGPIE_PREBUILT_URL: ${RUSTY_MAGPIE_PREBUILT_URL:-}
+        MOBIPWN_VERSION: ${MOBIPWN_VERSION:-dev}
     ports:
       - "${MOBIPWN_STACK_WEB_PORT:-8080}:80"
     depends_on:

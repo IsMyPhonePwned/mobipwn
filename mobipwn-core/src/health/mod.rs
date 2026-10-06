@@ -57,6 +57,7 @@ pub struct IntegrationsHealth {
 
 #[derive(Debug, Serialize)]
 pub struct HealthDetail {
+    pub version: String,
     pub postgres: ComponentHealth,
     pub clickhouse: ComponentHealth,
     pub alerting_rules: i64,
@@ -131,6 +132,7 @@ pub async fn fetch_health_detail(
     .await;
 
     Ok(HealthDetail {
+        version: crate::config::app_version(),
         postgres: pg,
         clickhouse: ch,
         alerting_rules,

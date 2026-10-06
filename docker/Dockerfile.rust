@@ -118,6 +118,8 @@ RUN chmod +x /usr/local/bin/setup-proxy-env.sh \
 ENV HTTP_PROXY=${HTTP_PROXY:-} HTTPS_PROXY=${HTTPS_PROXY:-} NO_PROXY=${NO_PROXY:-} \
     http_proxy=${HTTP_PROXY:-} https_proxy=${HTTPS_PROXY:-} no_proxy=${NO_PROXY:-}
 COPY --from=rust-builder /app/target/release/mobipwn-api /usr/local/bin/
+ARG MOBIPWN_VERSION=dev
+ENV MOBIPWN_VERSION=$MOBIPWN_VERSION
 EXPOSE 3000
 CMD ["mobipwn-api"]
 
@@ -143,6 +145,8 @@ RUN chmod +x /usr/local/bin/setup-proxy-env.sh \
 ENV HTTP_PROXY=${HTTP_PROXY:-} HTTPS_PROXY=${HTTPS_PROXY:-} NO_PROXY=${NO_PROXY:-} \
     http_proxy=${HTTP_PROXY:-} https_proxy=${HTTPS_PROXY:-} no_proxy=${NO_PROXY:-}
 COPY --from=rust-builder /app/target/release/mobipwn-jobs /usr/local/bin/
+ARG MOBIPWN_VERSION=dev
+ENV MOBIPWN_VERSION=$MOBIPWN_VERSION
 CMD ["mobipwn-jobs"]
 
 FROM debian:bookworm-slim AS mobipwn-search
@@ -167,5 +171,7 @@ RUN chmod +x /usr/local/bin/setup-proxy-env.sh \
 ENV HTTP_PROXY=${HTTP_PROXY:-} HTTPS_PROXY=${HTTPS_PROXY:-} NO_PROXY=${NO_PROXY:-} \
     http_proxy=${HTTP_PROXY:-} https_proxy=${HTTPS_PROXY:-} no_proxy=${NO_PROXY:-}
 COPY --from=rust-builder-search /app/target/release/mobipwn-search /usr/local/bin/
+ARG MOBIPWN_VERSION=dev
+ENV MOBIPWN_VERSION=$MOBIPWN_VERSION
 EXPOSE 3002
 CMD ["mobipwn-search"]

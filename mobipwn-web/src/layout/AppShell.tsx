@@ -34,6 +34,7 @@ import { AssistantPanel, AssistantSummon } from "@/components/assistant/Assistan
 import { RequirePermission } from "@/components/RequirePermission";
 import { PluginsProvider, usePlugins } from "@/contexts/PluginsContext";
 import { enabledPluginsWithNav, pluginNavMeta } from "@/lib/pluginNav";
+import { appVersion } from "@/lib/appVersion";
 import { titleForPath } from "./pageTitles";
 
 const MAIN_NAV = [
@@ -184,7 +185,10 @@ function AppShellInner() {
             alt="MobiPwn — mobile SIEM and threat analytics"
             className="sidebar-brand-logo"
           />
-          <span className="sidebar-brand-text">MobiPwn</span>
+          <span className="sidebar-brand-copy">
+            <span className="sidebar-brand-text">MobiPwn</span>
+            <span className="sidebar-brand-version">{appVersion()}</span>
+          </span>
         </Link>
         <nav className="sidebar-nav" aria-label="Main">
           {navSection(MAIN_NAV)}

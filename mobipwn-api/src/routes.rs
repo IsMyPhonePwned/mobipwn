@@ -26,6 +26,7 @@ use uuid::Uuid;
 pub struct HealthResponse {
     pub status: &'static str,
     pub clickhouse: &'static str,
+    pub version: String,
 }
 
 pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
@@ -36,6 +37,7 @@ pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok",
         clickhouse: ch,
+        version: mobipwn_core::app_version(),
     })
 }
 

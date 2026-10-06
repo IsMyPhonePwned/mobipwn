@@ -93,6 +93,23 @@ a:hover {
   overflow: hidden;
 }
 
+.sidebar-brand-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.sidebar-brand-version {
+  font-family: var(--font-mono);
+  font-size: 0.6923rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+
+.app-root:not(.expanded) .sidebar-brand-copy,
 .app-root:not(.expanded) .sidebar-brand-text,
 .app-root:not(.expanded) .nav-label,
 .app-root:not(.expanded) .nav-section-label {
@@ -11184,6 +11201,12 @@ html.light .platform-case-tops__badge--ios {
   width: min(420px, 100%);
   display: grid;
   gap: 12px;
+}
+
+.login-version {
+  font-family: var(--font-mono);
+  font-size: 0.7692rem;
+  margin-top: -6px;
 }
 
 .login-card label {
@@ -27317,6 +27340,7 @@ html.light .api-keys-role--analyst {
     transform: translateX(0);
   }
 
+  .sidebar .sidebar-brand-copy,
   .sidebar .sidebar-brand-text,
   .sidebar .nav-label,
   .sidebar .nav-section-label {

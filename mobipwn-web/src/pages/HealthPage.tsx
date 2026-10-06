@@ -8,6 +8,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { cancelRunningJobs, clearStuckEnrichmentSync } from "@/lib/jobsControl";
 import { apiFetch, apiPost } from "@/lib/api";
 import { useDocumentVisible } from "@/lib/useDocumentVisible";
+import { appVersion } from "@/lib/appVersion";
 
 type ComponentHealth = {
   status: string;
@@ -137,6 +138,7 @@ type IntegrationsHealth = {
 };
 
 type HealthDetail = {
+  version?: string;
   postgres: ComponentHealth;
   clickhouse: ComponentHealth;
   alerting_rules: number;
@@ -385,7 +387,7 @@ export default function HealthPage() {
     <>
       <PageHeader
         title={t("healthPage.title")}
-        description={t("healthPage.subtitle")}
+        description={`${t("healthPage.subtitle")} · ${data?.version ?? appVersion()}`}
       />
 
       {error && <p className="error">{error}</p>}

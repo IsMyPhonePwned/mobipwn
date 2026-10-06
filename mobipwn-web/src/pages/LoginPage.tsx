@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { finishMfaWebauthn, login, pageWebauthnSite, startMfaWebauthn, verifyMfa } from "@/lib/auth";
 import { assertSecurityKey, webauthnAvailable } from "@/lib/webauthn";
 import { Button } from "@/components/ui/button";
+import { appVersion } from "@/lib/appVersion";
 
 export default function LoginPage() {
   const { user, loading, requireAuth, loginSuccess } = useAuth();
@@ -79,6 +80,7 @@ export default function LoginPage() {
       <form className="card login-card" onSubmit={(e) => void submit(e)}>
         <h1>mobipwn</h1>
         <p className="muted">Sign in to the Mobile SIEM console</p>
+        <p className="muted login-version">{appVersion()}</p>
         {error && <p className="error">{error}</p>}
         {onLoopback && (
           <p className="muted text-xs">

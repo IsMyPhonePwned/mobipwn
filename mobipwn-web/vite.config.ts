@@ -11,6 +11,8 @@ const devLogDir = process.env.MOBIPWN_DEV_DIR
   : path.join(repoRoot, ".dev");
 const webPort = Number(process.env.MOBIPWN_WEB_PORT ?? 5173);
 const apiPort = webPort + 1;
+const appVersion =
+  (process.env.VITE_APP_VERSION ?? process.env.MOBIPWN_VERSION ?? "dev").trim() || "dev";
 
 export default defineConfig({
   plugins: [
@@ -22,6 +24,7 @@ export default defineConfig({
   define: {
     "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV ?? "development"),
     "process.env.DRAGGABLE_DEBUG": '""',
+    "import.meta.env.VITE_APP_VERSION": JSON.stringify(appVersion),
   },
   resolve: {
     alias: {
