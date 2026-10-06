@@ -4,6 +4,7 @@ pub mod api_key_cipher;
 pub mod api_keys;
 pub mod permissions;
 pub mod users;
+pub mod webauthn;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ApiRole {
@@ -50,8 +51,13 @@ pub use permissions::Permission;
 pub use users::{
     authenticate, consume_mfa_challenge, count_users, create_mfa_challenge, create_session,
     create_user, delete_session, delete_user, disable_totp, enable_totp, ensure_bootstrap_admin,
-    fetch_auth_activity, get_by_id, get_by_username, hash_password, is_stored_password_hash,
-    list_user_directory, list_users, setup_totp, totp_uri, update_user, user_to_record,
-    verify_password, verify_session, verify_totp, verify_user_totp, ActiveSession, AuthActivity,
-    RecentLogin, UserDirectoryEntry, UserRecord,
+    fetch_auth_activity, get_by_id, get_by_username, get_mfa_challenge_user, hash_password,
+    is_stored_password_hash, list_user_directory, list_users, setup_totp, totp_uri, update_user,
+    user_to_record, user_to_record_async, verify_password, verify_session, verify_totp,
+    verify_user_totp, ActiveSession, AuthActivity, RecentLogin, UserDirectoryEntry, UserRecord,
+};
+pub use webauthn::{
+    delete_webauthn_credential, finish_webauthn_authentication, finish_webauthn_registration,
+    list_webauthn_credentials, start_webauthn_authentication, start_webauthn_registration,
+    user_has_webauthn, webauthn_from_request, WebauthnCredentialRecord, WebauthnSettings,
 };

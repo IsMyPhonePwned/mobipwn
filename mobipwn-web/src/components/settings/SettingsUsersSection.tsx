@@ -110,7 +110,13 @@ export function SettingsUsersSection() {
                   <option value="viewer">viewer</option>
                 </select>
               </td>
-              <td>{u.totp_enabled ? "on" : "off"}</td>
+              <td>
+                {u.totp_enabled || u.webauthn_enabled
+                  ? [u.totp_enabled ? "app" : null, u.webauthn_enabled ? "YubiKey" : null]
+                      .filter(Boolean)
+                      .join(" + ")
+                  : "off"}
+              </td>
               <td>
                 <div className="settings-inline-form settings-inline-form--tight">
                   <input

@@ -23420,6 +23420,22 @@ html.dark .platform-case-tops__badge--endpoint {
   align-items: center;
 }
 
+.settings-webauthn-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.settings-webauthn-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .settings-user-form {
   display: flex;
   flex-wrap: wrap;

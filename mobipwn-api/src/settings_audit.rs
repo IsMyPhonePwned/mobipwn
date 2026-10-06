@@ -19,6 +19,7 @@ pub fn is_settings_audit_path(path: &str) -> bool {
         || path.starts_with("/v1/auth/users")
         || path.starts_with("/v1/auth/api-keys")
         || path.starts_with("/v1/auth/totp")
+        || path.starts_with("/v1/auth/webauthn")
         || path == "/v1/auth/me"
 }
 
@@ -117,6 +118,18 @@ pub fn describe_settings_action(method: &Method, path: &str) -> String {
     }
     if path == "/v1/auth/totp/disable" {
         return "disable MFA".into();
+    }
+    if path == "/v1/auth/webauthn/register/start" {
+        return "start security key registration".into();
+    }
+    if path == "/v1/auth/webauthn/register/finish" {
+        return "register security key".into();
+    }
+    if path == "/v1/auth/webauthn/credentials" {
+        return "list security keys".into();
+    }
+    if path.starts_with("/v1/auth/webauthn/credentials/") {
+        return "remove security key".into();
     }
     format!("{} {}", method.as_str(), path)
 }

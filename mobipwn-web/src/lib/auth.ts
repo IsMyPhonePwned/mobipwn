@@ -7,6 +7,7 @@ export type AuthUser = {
   username: string;
   role: string;
   totp_enabled: boolean;
+  webauthn_enabled?: boolean;
   created_at?: string;
   permissions?: string[];
 };
@@ -47,7 +48,12 @@ export async function login(username: string, password: string) {
   });
   const data = await parseApiResponse<
     | { token: string; user: AuthUser }
-    | { mfa_required: boolean; challenge_id: string }
+    | {
+        mfa_required: boolean;
+        challenge_id: string;
+        totp_available?: boolean;
+        webauthn_available?: boolean;
+      }
   >(res);
   return data;
 }
@@ -96,6 +102,86 @@ export async function enableTotp(code: string) {
 export async function disableTotp() {
   const res = await fetch("/api/v1/auth/totp/disable", { method: "POST", headers: authHeaders() });
   if (!res.ok) throw new Error(await res.text());
+}
+
+export type WebauthnCredential = {
+  id: string;
+  name: string;
+  created_at: string;
+  last_used_at: string | null;
+};
+
+export type WebauthnSite = {
+  origin: string;
+  rp_id?: string;
+};
+
+export function pageWebauthnSite(overrides?: { origin?: string; rp_id?: string }): WebauthnSite {
+  const origin = (overrides?.origin ?? (typeof window !== "undefined" ? window.location.origin : "")).trim();
+  const rp_id = overrides?.rp_id?.trim();
+  return rp_id ? { origin, rp_id } : { origin };
+}
+
+export async function startWebauthnRegister(site: WebauthnSite) {
+  const res = await fetch("/api/v1/auth/webauthn/register/start", {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(site),
+  });
+  return parseApiResponse<{ challenge_id: string; publicKey?: Record<string, unknown> } & Record<string, unknown>>(
+    res
+  );
+}
+
+export async function finishWebauthnRegister(
+  challengeId: string,
+  credential: Record<string, unknown>,
+  site: WebauthnSite,
+  name?: string
+) {
+  const res = await fetch("/api/v1/auth/webauthn/register/finish", {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ challenge_id: challengeId, credential, name, ...site }),
+  });
+  return parseApiResponse<WebauthnCredential>(res);
+}
+
+export async function listWebauthnCredentials() {
+  return parseApiResponse<WebauthnCredential[]>(
+    await fetch("/api/v1/auth/webauthn/credentials", { headers: authHeaders() })
+  );
+}
+
+export async function deleteWebauthnCredential(id: string) {
+  const res = await fetch(`/api/v1/auth/webauthn/credentials/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (res.status === 204) return;
+  await parseApiResponse(res);
+}
+
+export async function startMfaWebauthn(challengeId: string, site: WebauthnSite) {
+  const res = await fetch("/api/v1/auth/mfa/webauthn/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ challenge_id: challengeId, ...site }),
+  });
+  return parseApiResponse<Record<string, unknown>>(res);
+}
+
+export async function finishMfaWebauthn(
+  challengeId: string,
+  credential: Record<string, unknown>,
+  site: WebauthnSite
+) {
+  const res = await fetch("/api/v1/auth/mfa/webauthn/finish", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ challenge_id: challengeId, credential, ...site }),
+  });
+  return parseApiResponse<{ token: string; user: AuthUser }>(res);
 }
 
 export async function listUsers() {

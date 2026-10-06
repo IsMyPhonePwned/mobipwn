@@ -8,6 +8,7 @@ use sqlx::PgPool;
 use totp_lite::{totp_custom, Sha1};
 use uuid::Uuid;
 
+use super::webauthn::{user_has_webauthn, webauthn_user_ids};
 use super::{hash_key, ApiRole, AuthContext};
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -16,6 +17,8 @@ pub struct UserRecord {
     pub username: String,
     pub role: String,
     pub totp_enabled: bool,
+    #[serde(default)]
+    pub webauthn_enabled: bool,
     pub created_at: DateTime<Utc>,
     pub permissions: Vec<super::Permission>,
 }
@@ -161,11 +164,16 @@ pub async fn get_by_id(pool: &PgPool, id: Uuid) -> anyhow::Result<Option<UserRec
     .bind(id)
     .fetch_optional(pool)
     .await?;
-    Ok(row.map(|r| UserRecord {
+    let Some(r) = row else {
+        return Ok(None);
+    };
+    let webauthn_enabled = user_has_webauthn(pool, r.id).await?;
+    Ok(Some(UserRecord {
         id: r.id,
         username: r.username,
         role: r.role.clone(),
         totp_enabled: r.totp_enabled,
+        webauthn_enabled,
         created_at: r.created_at,
         permissions: parse_role(&r.role).permissions(),
     }))
@@ -210,6 +218,29 @@ pub async fn create_mfa_challenge(pool: &PgPool, user_id: Uuid) -> anyhow::Resul
 pub async fn consume_mfa_challenge(pool: &PgPool, challenge_id: Uuid) -> anyhow::Result<Option<UserRow>> {
     let row: Option<(Uuid,)> = sqlx::query_as(
         "DELETE FROM auth_mfa_challenges WHERE id = $1 AND expires_at > now() RETURNING user_id",
+    )
+    .bind(challenge_id)
+    .fetch_optional(pool)
+    .await?;
+    let Some((user_id,)) = row else {
+        return Ok(None);
+    };
+    let user = sqlx::query_as::<_, UserRow>(
+        "SELECT id, username, password_hash, role::text, totp_secret, totp_enabled, created_at \
+         FROM users WHERE id = $1",
+    )
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(user)
+}
+
+pub async fn get_mfa_challenge_user(
+    pool: &PgPool,
+    challenge_id: Uuid,
+) -> anyhow::Result<Option<UserRow>> {
+    let row: Option<(Uuid,)> = sqlx::query_as(
+        "SELECT user_id FROM auth_mfa_challenges WHERE id = $1 AND expires_at > now()",
     )
     .bind(challenge_id)
     .fetch_optional(pool)
@@ -349,9 +380,16 @@ pub fn user_to_record(user: &UserRow) -> UserRecord {
         username: user.username.clone(),
         role: user.role.clone(),
         totp_enabled: user.totp_enabled,
+        webauthn_enabled: false,
         created_at: user.created_at,
         permissions: role.permissions(),
     }
+}
+
+pub async fn user_to_record_async(pool: &PgPool, user: &UserRow) -> anyhow::Result<UserRecord> {
+    let mut rec = user_to_record(user);
+    rec.webauthn_enabled = user_has_webauthn(pool, user.id).await?;
+    Ok(rec)
 }
 
 fn normalize_role(role: &str) -> anyhow::Result<&'static str> {
@@ -370,7 +408,13 @@ pub async fn list_users(pool: &PgPool) -> anyhow::Result<Vec<UserRecord>> {
     )
     .fetch_all(pool)
     .await?;
-    Ok(rows.iter().map(user_to_record).collect())
+    let mut records: Vec<UserRecord> = rows.iter().map(user_to_record).collect();
+    let keyed: std::collections::HashSet<Uuid> =
+        webauthn_user_ids(pool).await?.into_iter().collect();
+    for rec in &mut records {
+        rec.webauthn_enabled = keyed.contains(&rec.id);
+    }
+    Ok(records)
 }
 
 pub async fn list_user_directory(pool: &PgPool) -> anyhow::Result<Vec<UserDirectoryEntry>> {

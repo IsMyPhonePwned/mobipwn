@@ -7,11 +7,14 @@ use axum::{
 };
 use mobipwn_core::auth::{
     authenticate, consume_mfa_challenge, create_api_key, create_mfa_challenge, create_session,
-    create_user, delete_session, delete_user, disable_totp, enable_totp, get_by_id, list_api_key_usage_by_user,
-    list_api_keys, list_api_keys_for_user, list_user_directory, list_users, reveal_api_key_token, revoke_api_key,
-    setup_totp, suspend_api_key, suspend_api_keys_for_user, unsuspend_api_key, update_user, user_to_record,
-    verify_user_totp, ApiRole, AuthContext, CreateApiKeyRequest, RevealApiKeyResponse, UserDirectoryEntry,
-    UserRecord,
+    create_user, delete_session, delete_user, delete_webauthn_credential, disable_totp, enable_totp,
+    finish_webauthn_authentication, finish_webauthn_registration, get_by_id, get_mfa_challenge_user,
+    list_api_key_usage_by_user, list_api_keys, list_api_keys_for_user, list_user_directory, list_users,
+    list_webauthn_credentials, reveal_api_key_token, revoke_api_key, setup_totp, start_webauthn_authentication,
+    start_webauthn_registration, suspend_api_key, suspend_api_keys_for_user, unsuspend_api_key, update_user,
+    user_has_webauthn, user_to_record_async, verify_user_totp, webauthn_from_request, ApiRole,
+    AuthContext, CreateApiKeyRequest, RevealApiKeyResponse, UserDirectoryEntry, UserRecord,
+    WebauthnCredentialRecord, WebauthnSettings,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -22,6 +25,8 @@ pub fn public_router() -> Router<AppState> {
         .route("/v1/auth/status", get(auth_status))
         .route("/v1/auth/login", post(login))
         .route("/v1/auth/mfa", post(verify_mfa))
+        .route("/v1/auth/mfa/webauthn/start", post(mfa_webauthn_start))
+        .route("/v1/auth/mfa/webauthn/finish", post(mfa_webauthn_finish))
 }
 
 /// Routes that require a valid session or API key.
@@ -32,6 +37,13 @@ pub fn protected_router() -> Router<AppState> {
         .route("/v1/auth/totp/setup", post(totp_setup))
         .route("/v1/auth/totp/enable", post(totp_enable))
         .route("/v1/auth/totp/disable", post(totp_disable))
+        .route("/v1/auth/webauthn/register/start", post(webauthn_register_start))
+        .route("/v1/auth/webauthn/register/finish", post(webauthn_register_finish))
+        .route("/v1/auth/webauthn/credentials", get(webauthn_credentials_list))
+        .route(
+            "/v1/auth/webauthn/credentials/{id}",
+            axum::routing::delete(webauthn_credential_delete),
+        )
         .route("/v1/auth/users/directory", get(list_auth_user_directory))
         .route("/v1/auth/users", get(list_auth_users).post(create_auth_user))
         .route(
@@ -85,6 +97,8 @@ struct AuthUserResponse {
 struct MfaRequiredResponse {
     mfa_required: bool,
     challenge_id: String,
+    totp_available: bool,
+    webauthn_available: bool,
 }
 
 async fn login(
@@ -96,21 +110,29 @@ async fn login(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::UNAUTHORIZED, "invalid credentials".into()))?;
 
-    if user.totp_enabled {
+    let webauthn_available = user_has_webauthn(&state.pool.postgres, user.id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if user.totp_enabled || webauthn_available {
         let challenge_id = create_mfa_challenge(&state.pool.postgres, user.id)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         return Ok(Json(serde_json::json!(MfaRequiredResponse {
             mfa_required: true,
             challenge_id: challenge_id.to_string(),
+            totp_available: user.totp_enabled,
+            webauthn_available,
         })));
     }
 
     let token = create_session(&state.pool.postgres, &user, true)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let record = user_to_record_async(&state.pool.postgres, &user)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(serde_json::json!(AuthUserResponse {
-        user: user_to_record(&user),
+        user: record,
         token,
     })))
 }
@@ -127,22 +149,224 @@ async fn verify_mfa(
 ) -> Result<Json<AuthUserResponse>, (StatusCode, String)> {
     let challenge_id = Uuid::parse_str(body.challenge_id.trim())
         .map_err(|_| (StatusCode::BAD_REQUEST, "invalid challenge".into()))?;
-    let user = consume_mfa_challenge(&state.pool.postgres, challenge_id)
+    let user = get_mfa_challenge_user(&state.pool.postgres, challenge_id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::UNAUTHORIZED, "challenge expired".into()))?;
 
-    if !verify_user_totp(&user, &body.code) {
+    if !user.totp_enabled || !verify_user_totp(&user, &body.code) {
         return Err((StatusCode::UNAUTHORIZED, "invalid code".into()));
     }
+
+    consume_mfa_challenge(&state.pool.postgres, challenge_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::UNAUTHORIZED, "challenge expired".into()))?;
 
     let token = create_session(&state.pool.postgres, &user, true)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let record = user_to_record_async(&state.pool.postgres, &user)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(AuthUserResponse {
-        user: user_to_record(&user),
+        user: record,
         token,
     }))
+}
+
+fn webauthn_err(e: anyhow::Error) -> (StatusCode, String) {
+    let msg = e.to_string();
+    let lower = msg.to_lowercase();
+    if lower.contains("expired") || lower.contains("invalid") || lower.contains("unknown") {
+        (StatusCode::UNAUTHORIZED, msg)
+    } else if lower.contains("localhost")
+        || lower.contains("already registered")
+        || lower.contains("no security")
+        || lower.contains("origin")
+        || lower.contains("configured for")
+    {
+        (StatusCode::BAD_REQUEST, msg)
+    } else {
+        (StatusCode::INTERNAL_SERVER_ERROR, msg)
+    }
+}
+
+async fn load_webauthn_settings(state: &AppState) -> Result<WebauthnSettings, (StatusCode, String)> {
+    let raw = state
+        .settings
+        .get("webauthn_config")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(serde_json::from_value(raw).unwrap_or_default())
+}
+
+#[derive(Deserialize, Default)]
+struct WebauthnSiteArgs {
+    #[serde(default)]
+    origin: String,
+    #[serde(default)]
+    rp_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct MfaWebauthnStartBody {
+    challenge_id: String,
+    #[serde(flatten)]
+    site: WebauthnSiteArgs,
+}
+
+async fn mfa_webauthn_start(
+    State(state): State<AppState>,
+    Json(body): Json<MfaWebauthnStartBody>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let challenge_id = Uuid::parse_str(body.challenge_id.trim())
+        .map_err(|_| (StatusCode::BAD_REQUEST, "invalid challenge".into()))?;
+    let user = get_mfa_challenge_user(&state.pool.postgres, challenge_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::UNAUTHORIZED, "challenge expired".into()))?;
+    let settings = load_webauthn_settings(&state).await?;
+    let webauthn = webauthn_from_request(&body.site.origin, body.site.rp_id.as_deref(), &settings)
+        .map_err(webauthn_err)?;
+    let options = start_webauthn_authentication(&state.pool.postgres, &webauthn, user.id, challenge_id)
+        .await
+        .map_err(webauthn_err)?;
+    Ok(Json(serde_json::to_value(options).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?))
+}
+
+#[derive(Deserialize)]
+struct MfaWebauthnFinishBody {
+    challenge_id: String,
+    credential: serde_json::Value,
+    #[serde(flatten)]
+    site: WebauthnSiteArgs,
+}
+
+async fn mfa_webauthn_finish(
+    State(state): State<AppState>,
+    Json(body): Json<MfaWebauthnFinishBody>,
+) -> Result<Json<AuthUserResponse>, (StatusCode, String)> {
+    let challenge_id = Uuid::parse_str(body.challenge_id.trim())
+        .map_err(|_| (StatusCode::BAD_REQUEST, "invalid challenge".into()))?;
+    let user = get_mfa_challenge_user(&state.pool.postgres, challenge_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::UNAUTHORIZED, "challenge expired".into()))?;
+    let credential = serde_json::from_value(body.credential)
+        .map_err(|e| (StatusCode::BAD_REQUEST, format!("invalid credential: {e}")))?;
+    let settings = load_webauthn_settings(&state).await?;
+    let webauthn = webauthn_from_request(&body.site.origin, body.site.rp_id.as_deref(), &settings)
+        .map_err(webauthn_err)?;
+    finish_webauthn_authentication(
+        &state.pool.postgres,
+        &webauthn,
+        user.id,
+        challenge_id,
+        credential,
+    )
+    .await
+    .map_err(webauthn_err)?;
+    consume_mfa_challenge(&state.pool.postgres, challenge_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::UNAUTHORIZED, "challenge expired".into()))?;
+    let token = create_session(&state.pool.postgres, &user, true)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let record = user_to_record_async(&state.pool.postgres, &user)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(AuthUserResponse {
+        user: record,
+        token,
+    }))
+}
+
+async fn webauthn_register_start(
+    State(state): State<AppState>,
+    Extension(ctx): Extension<AuthContext>,
+    Json(body): Json<WebauthnSiteArgs>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let user_id = ctx.user_id.ok_or((StatusCode::UNAUTHORIZED, "sign in required".into()))?;
+    let username = ctx
+        .user_username
+        .as_deref()
+        .ok_or((StatusCode::UNAUTHORIZED, "sign in required".into()))?;
+    let settings = load_webauthn_settings(&state).await?;
+    let webauthn = webauthn_from_request(&body.origin, body.rp_id.as_deref(), &settings).map_err(webauthn_err)?;
+    let (challenge_id, ccr) =
+        start_webauthn_registration(&state.pool.postgres, &webauthn, user_id, username)
+            .await
+            .map_err(webauthn_err)?;
+    let mut value = serde_json::to_value(&ccr).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if let Some(obj) = value.as_object_mut() {
+        obj.insert("challenge_id".into(), serde_json::json!(challenge_id.to_string()));
+    }
+    Ok(Json(value))
+}
+
+#[derive(Deserialize)]
+struct WebauthnRegisterFinishBody {
+    challenge_id: String,
+    credential: serde_json::Value,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(flatten)]
+    site: WebauthnSiteArgs,
+}
+
+async fn webauthn_register_finish(
+    State(state): State<AppState>,
+    Extension(ctx): Extension<AuthContext>,
+    Json(body): Json<WebauthnRegisterFinishBody>,
+) -> Result<Json<WebauthnCredentialRecord>, (StatusCode, String)> {
+    let user_id = ctx.user_id.ok_or((StatusCode::UNAUTHORIZED, "sign in required".into()))?;
+    let challenge_id = Uuid::parse_str(body.challenge_id.trim())
+        .map_err(|_| (StatusCode::BAD_REQUEST, "invalid challenge".into()))?;
+    let credential = serde_json::from_value(body.credential)
+        .map_err(|e| (StatusCode::BAD_REQUEST, format!("invalid credential: {e}")))?;
+    let settings = load_webauthn_settings(&state).await?;
+    let webauthn = webauthn_from_request(&body.site.origin, body.site.rp_id.as_deref(), &settings)
+        .map_err(webauthn_err)?;
+    finish_webauthn_registration(
+        &state.pool.postgres,
+        &webauthn,
+        user_id,
+        challenge_id,
+        credential,
+        body.name.as_deref(),
+    )
+    .await
+    .map(Json)
+    .map_err(webauthn_err)
+}
+
+async fn webauthn_credentials_list(
+    State(state): State<AppState>,
+    Extension(ctx): Extension<AuthContext>,
+) -> Result<Json<Vec<WebauthnCredentialRecord>>, StatusCode> {
+    let user_id = ctx.user_id.ok_or(StatusCode::UNAUTHORIZED)?;
+    list_webauthn_credentials(&state.pool.postgres, user_id)
+        .await
+        .map(Json)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+async fn webauthn_credential_delete(
+    State(state): State<AppState>,
+    Extension(ctx): Extension<AuthContext>,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let user_id = ctx.user_id.ok_or((StatusCode::UNAUTHORIZED, "sign in required".into()))?;
+    let ok = delete_webauthn_credential(&state.pool.postgres, user_id, id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if ok {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err((StatusCode::NOT_FOUND, "security key not found".into()))
+    }
 }
 
 async fn logout(
