@@ -1,7 +1,8 @@
+use crate::settings_audit::record_auth_audit;
 use crate::AppState;
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
+    http::{header, HeaderMap, StatusCode},
     routing::{get, post},
     Extension, Json, Router,
 };
@@ -103,12 +104,44 @@ struct MfaRequiredResponse {
 
 async fn login(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(body): Json<LoginBody>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let user = authenticate(&state.pool.postgres, body.username.trim(), &body.password)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::UNAUTHORIZED, "invalid credentials".into()))?;
+    let ip = client_ip(&headers);
+    let ua = user_agent(&headers);
+    let username = body.username.trim();
+    let user = match authenticate(&state.pool.postgres, username, &body.password).await {
+        Ok(Some(u)) => u,
+        Ok(None) => {
+            record_auth_audit(
+                &state.pool.postgres,
+                username,
+                "login failed",
+                "/v1/auth/login",
+                401,
+                Some("invalid credentials"),
+                ip,
+                ua,
+            )
+            .await;
+            return Err((StatusCode::UNAUTHORIZED, "invalid credentials".into()));
+        }
+        Err(e) => {
+            let msg = e.to_string();
+            record_auth_audit(
+                &state.pool.postgres,
+                username,
+                "login error",
+                "/v1/auth/login",
+                500,
+                Some(&msg),
+                ip,
+                ua,
+            )
+            .await;
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, msg));
+        }
+    };
 
     let webauthn_available = user_has_webauthn(&state.pool.postgres, user.id)
         .await
@@ -117,6 +150,21 @@ async fn login(
         let challenge_id = create_mfa_challenge(&state.pool.postgres, user.id)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        let detail = format!(
+            "totp={} webauthn={}",
+            user.totp_enabled, webauthn_available
+        );
+        record_auth_audit(
+            &state.pool.postgres,
+            &user.username,
+            "login MFA required",
+            "/v1/auth/login",
+            200,
+            Some(&detail),
+            ip,
+            ua,
+        )
+        .await;
         return Ok(Json(serde_json::json!(MfaRequiredResponse {
             mfa_required: true,
             challenge_id: challenge_id.to_string(),
@@ -131,6 +179,17 @@ async fn login(
     let record = user_to_record_async(&state.pool.postgres, &user)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    record_auth_audit(
+        &state.pool.postgres,
+        &user.username,
+        "login success",
+        "/v1/auth/login",
+        200,
+        None,
+        ip,
+        ua,
+    )
+    .await;
     Ok(Json(serde_json::json!(AuthUserResponse {
         user: record,
         token,
@@ -145,23 +204,65 @@ struct MfaBody {
 
 async fn verify_mfa(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(body): Json<MfaBody>,
 ) -> Result<Json<AuthUserResponse>, (StatusCode, String)> {
+    let ip = client_ip(&headers);
+    let ua = user_agent(&headers);
     let challenge_id = Uuid::parse_str(body.challenge_id.trim())
         .map_err(|_| (StatusCode::BAD_REQUEST, "invalid challenge".into()))?;
-    let user = get_mfa_challenge_user(&state.pool.postgres, challenge_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::UNAUTHORIZED, "challenge expired".into()))?;
+    let user = match get_mfa_challenge_user(&state.pool.postgres, challenge_id).await {
+        Ok(Some(u)) => u,
+        Ok(None) => {
+            record_auth_audit(
+                &state.pool.postgres,
+                "unknown",
+                "MFA TOTP failed",
+                "/v1/auth/mfa",
+                401,
+                Some("challenge expired"),
+                ip,
+                ua,
+            )
+            .await;
+            return Err((StatusCode::UNAUTHORIZED, "challenge expired".into()));
+        }
+        Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
+    };
 
     if !user.totp_enabled || !verify_user_totp(&user, &body.code) {
+        record_auth_audit(
+            &state.pool.postgres,
+            &user.username,
+            "MFA TOTP failed",
+            "/v1/auth/mfa",
+            401,
+            Some("invalid code"),
+            ip,
+            ua,
+        )
+        .await;
         return Err((StatusCode::UNAUTHORIZED, "invalid code".into()));
     }
 
-    consume_mfa_challenge(&state.pool.postgres, challenge_id)
+    if consume_mfa_challenge(&state.pool.postgres, challenge_id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::UNAUTHORIZED, "challenge expired".into()))?;
+        .is_none()
+    {
+        record_auth_audit(
+            &state.pool.postgres,
+            &user.username,
+            "MFA TOTP failed",
+            "/v1/auth/mfa",
+            401,
+            Some("challenge expired"),
+            ip,
+            ua,
+        )
+        .await;
+        return Err((StatusCode::UNAUTHORIZED, "challenge expired".into()));
+    }
 
     let token = create_session(&state.pool.postgres, &user, true)
         .await
@@ -169,6 +270,17 @@ async fn verify_mfa(
     let record = user_to_record_async(&state.pool.postgres, &user)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    record_auth_audit(
+        &state.pool.postgres,
+        &user.username,
+        "MFA TOTP success",
+        "/v1/auth/mfa",
+        200,
+        None,
+        ip,
+        ua,
+    )
+    .await;
     Ok(Json(AuthUserResponse {
         user: record,
         token,
@@ -218,20 +330,88 @@ struct MfaWebauthnStartBody {
 
 async fn mfa_webauthn_start(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(body): Json<MfaWebauthnStartBody>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let ip = client_ip(&headers);
+    let ua = user_agent(&headers);
     let challenge_id = Uuid::parse_str(body.challenge_id.trim())
         .map_err(|_| (StatusCode::BAD_REQUEST, "invalid challenge".into()))?;
-    let user = get_mfa_challenge_user(&state.pool.postgres, challenge_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::UNAUTHORIZED, "challenge expired".into()))?;
+    let user = match get_mfa_challenge_user(&state.pool.postgres, challenge_id).await {
+        Ok(Some(u)) => u,
+        Ok(None) => {
+            record_auth_audit(
+                &state.pool.postgres,
+                "unknown",
+                "MFA security key start failed",
+                "/v1/auth/mfa/webauthn/start",
+                401,
+                Some("challenge expired"),
+                ip,
+                ua,
+            )
+            .await;
+            return Err((StatusCode::UNAUTHORIZED, "challenge expired".into()));
+        }
+        Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
+    };
     let settings = load_webauthn_settings(&state).await?;
-    let webauthn = webauthn_from_request(&body.site.origin, body.site.rp_id.as_deref(), &settings)
-        .map_err(webauthn_err)?;
-    let options = start_webauthn_authentication(&state.pool.postgres, &webauthn, user.id, challenge_id)
-        .await
-        .map_err(webauthn_err)?;
+    let webauthn = match webauthn_from_request(&body.site.origin, body.site.rp_id.as_deref(), &settings)
+    {
+        Ok(w) => w,
+        Err(e) => {
+            let (status, msg) = webauthn_err(e);
+            record_auth_audit(
+                &state.pool.postgres,
+                &user.username,
+                "MFA security key start failed",
+                "/v1/auth/mfa/webauthn/start",
+                status.as_u16(),
+                Some(&msg),
+                ip,
+                ua,
+            )
+            .await;
+            return Err((status, msg));
+        }
+    };
+    let options = match start_webauthn_authentication(
+        &state.pool.postgres,
+        &webauthn,
+        user.id,
+        challenge_id,
+    )
+    .await
+    {
+        Ok(o) => o,
+        Err(e) => {
+            let (status, msg) = webauthn_err(e);
+            record_auth_audit(
+                &state.pool.postgres,
+                &user.username,
+                "MFA security key start failed",
+                "/v1/auth/mfa/webauthn/start",
+                status.as_u16(),
+                Some(&msg),
+                ip,
+                ua,
+            )
+            .await;
+            return Err((status, msg));
+        }
+    };
+    let origin_detail = body.site.origin.trim();
+    record_auth_audit(
+        &state.pool.postgres,
+        &user.username,
+        "MFA security key challenge",
+        "/v1/auth/mfa/webauthn/start",
+        200,
+        (!origin_detail.is_empty()).then_some(origin_detail),
+        ip,
+        ua,
+    )
+    .await;
     Ok(Json(serde_json::to_value(options).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?))
 }
 
@@ -245,20 +425,70 @@ struct MfaWebauthnFinishBody {
 
 async fn mfa_webauthn_finish(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(body): Json<MfaWebauthnFinishBody>,
 ) -> Result<Json<AuthUserResponse>, (StatusCode, String)> {
+    let ip = client_ip(&headers);
+    let ua = user_agent(&headers);
     let challenge_id = Uuid::parse_str(body.challenge_id.trim())
         .map_err(|_| (StatusCode::BAD_REQUEST, "invalid challenge".into()))?;
-    let user = get_mfa_challenge_user(&state.pool.postgres, challenge_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::UNAUTHORIZED, "challenge expired".into()))?;
-    let credential = serde_json::from_value(body.credential)
-        .map_err(|e| (StatusCode::BAD_REQUEST, format!("invalid credential: {e}")))?;
+    let user = match get_mfa_challenge_user(&state.pool.postgres, challenge_id).await {
+        Ok(Some(u)) => u,
+        Ok(None) => {
+            record_auth_audit(
+                &state.pool.postgres,
+                "unknown",
+                "MFA security key failed",
+                "/v1/auth/mfa/webauthn/finish",
+                401,
+                Some("challenge expired"),
+                ip,
+                ua,
+            )
+            .await;
+            return Err((StatusCode::UNAUTHORIZED, "challenge expired".into()));
+        }
+        Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
+    };
+    let credential = match serde_json::from_value(body.credential) {
+        Ok(c) => c,
+        Err(e) => {
+            let msg = format!("invalid credential: {e}");
+            record_auth_audit(
+                &state.pool.postgres,
+                &user.username,
+                "MFA security key failed",
+                "/v1/auth/mfa/webauthn/finish",
+                400,
+                Some(&msg),
+                ip,
+                ua,
+            )
+            .await;
+            return Err((StatusCode::BAD_REQUEST, msg));
+        }
+    };
     let settings = load_webauthn_settings(&state).await?;
-    let webauthn = webauthn_from_request(&body.site.origin, body.site.rp_id.as_deref(), &settings)
-        .map_err(webauthn_err)?;
-    finish_webauthn_authentication(
+    let webauthn = match webauthn_from_request(&body.site.origin, body.site.rp_id.as_deref(), &settings)
+    {
+        Ok(w) => w,
+        Err(e) => {
+            let (status, msg) = webauthn_err(e);
+            record_auth_audit(
+                &state.pool.postgres,
+                &user.username,
+                "MFA security key failed",
+                "/v1/auth/mfa/webauthn/finish",
+                status.as_u16(),
+                Some(&msg),
+                ip,
+                ua,
+            )
+            .await;
+            return Err((status, msg));
+        }
+    };
+    if let Err(e) = finish_webauthn_authentication(
         &state.pool.postgres,
         &webauthn,
         user.id,
@@ -266,17 +496,56 @@ async fn mfa_webauthn_finish(
         credential,
     )
     .await
-    .map_err(webauthn_err)?;
-    consume_mfa_challenge(&state.pool.postgres, challenge_id)
+    {
+        let (status, msg) = webauthn_err(e);
+        record_auth_audit(
+            &state.pool.postgres,
+            &user.username,
+            "MFA security key failed",
+            "/v1/auth/mfa/webauthn/finish",
+            status.as_u16(),
+            Some(&msg),
+            ip,
+            ua,
+        )
+        .await;
+        return Err((status, msg));
+    }
+    if consume_mfa_challenge(&state.pool.postgres, challenge_id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::UNAUTHORIZED, "challenge expired".into()))?;
+        .is_none()
+    {
+        record_auth_audit(
+            &state.pool.postgres,
+            &user.username,
+            "MFA security key failed",
+            "/v1/auth/mfa/webauthn/finish",
+            401,
+            Some("challenge expired"),
+            ip,
+            ua,
+        )
+        .await;
+        return Err((StatusCode::UNAUTHORIZED, "challenge expired".into()));
+    }
     let token = create_session(&state.pool.postgres, &user, true)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let record = user_to_record_async(&state.pool.postgres, &user)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    record_auth_audit(
+        &state.pool.postgres,
+        &user.username,
+        "MFA security key success",
+        "/v1/auth/mfa/webauthn/finish",
+        200,
+        None,
+        ip,
+        ua,
+    )
+    .await;
     Ok(Json(AuthUserResponse {
         user: record,
         token,
@@ -329,7 +598,7 @@ async fn webauthn_register_finish(
     let settings = load_webauthn_settings(&state).await?;
     let webauthn = webauthn_from_request(&body.site.origin, body.site.rp_id.as_deref(), &settings)
         .map_err(webauthn_err)?;
-    finish_webauthn_registration(
+    let record = finish_webauthn_registration(
         &state.pool.postgres,
         &webauthn,
         user_id,
@@ -338,8 +607,30 @@ async fn webauthn_register_finish(
         body.name.as_deref(),
     )
     .await
-    .map(Json)
-    .map_err(webauthn_err)
+    .map_err(webauthn_err)?;
+    // Lock the console origin after first successful enroll so MFA asserts against the same RP.
+    if settings.origin.trim().is_empty() {
+        let origin = body.site.origin.trim().trim_end_matches('/');
+        if !origin.is_empty() {
+            let cfg = WebauthnSettings {
+                origin: origin.to_string(),
+                rp_id: body
+                    .site
+                    .rp_id
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or("")
+                    .to_string(),
+            };
+            if let Ok(value) = serde_json::to_value(&cfg) {
+                if let Err(e) = state.settings.set("webauthn_config", &value).await {
+                    tracing::warn!(error = %e, "failed to persist webauthn_config after key enroll");
+                }
+            }
+        }
+    }
+    Ok(Json(record))
 }
 
 async fn webauthn_credentials_list(
@@ -535,11 +826,35 @@ async fn remove_auth_user(
     }
 }
 
-fn bearer_token(headers: &axum::http::HeaderMap) -> Option<&str> {
+fn bearer_token(headers: &HeaderMap) -> Option<&str> {
     headers
-        .get(axum::http::header::AUTHORIZATION)
+        .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.strip_prefix("Bearer "))
+}
+
+fn client_ip(headers: &HeaderMap) -> Option<&str> {
+    headers
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.split(',').next())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            headers
+                .get("x-real-ip")
+                .and_then(|v| v.to_str().ok())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+        })
+}
+
+fn user_agent(headers: &HeaderMap) -> Option<&str> {
+    headers
+        .get(header::USER_AGENT)
+        .and_then(|v| v.to_str().ok())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
 }
 
 async fn list_auth_api_keys(

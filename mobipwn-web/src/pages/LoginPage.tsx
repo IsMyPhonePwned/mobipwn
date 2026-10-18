@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
+import { useActivityLog } from "@/contexts/ActivityLogContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { finishMfaWebauthn, login, pageWebauthnSite, startMfaWebauthn, verifyMfa } from "@/lib/auth";
 import { assertSecurityKey, webauthnAvailable } from "@/lib/webauthn";
@@ -8,9 +9,10 @@ import { appVersion } from "@/lib/appVersion";
 
 export default function LoginPage() {
   const { user, loading, requireAuth, loginSuccess } = useAuth();
+  const { log } = useActivityLog();
   const navigate = useNavigate();
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("admin");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [mfaCode, setMfaCode] = useState("");
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [totpAvailable, setTotpAvailable] = useState(false);
@@ -23,17 +25,24 @@ export default function LoginPage() {
   const onLoopback = window.location.hostname === "127.0.0.1";
   const localhostHref = `${window.location.protocol}//localhost:${window.location.port}${window.location.pathname}`;
 
-  const completeLogin = (token: string, nextUser: Parameters<typeof loginSuccess>[1]) => {
+  const completeLogin = (token: string, nextUser: Parameters<typeof loginSuccess>[1], how: string) => {
+    log("info", `Signed in as ${nextUser.username}`, how);
     loginSuccess(token, nextUser);
     navigate("/", { replace: true });
   };
 
   const verifySecurityKey = async (id: string) => {
+    if (onLoopback) {
+      throw new Error(
+        "YubiKey MFA requires http://localhost (not 127.0.0.1). Open the console on localhost and try again."
+      );
+    }
+    log("info", "Start MFA security key", username.trim() || undefined);
     const site = pageWebauthnSite();
     const options = await startMfaWebauthn(id, site);
     const credential = await assertSecurityKey(options);
     const res = await finishMfaWebauthn(id, credential, site);
-    completeLogin(res.token, res.user);
+    completeLogin(res.token, res.user, "security key");
   };
 
   const submit = async (e: FormEvent) => {
@@ -43,33 +52,45 @@ export default function LoginPage() {
     try {
       if (challengeId) {
         if (totpAvailable && mfaCode.trim()) {
+          log("info", "Verify MFA authenticator code", username.trim() || undefined);
           const res = await verifyMfa(challengeId, mfaCode);
-          completeLogin(res.token, res.user);
+          completeLogin(res.token, res.user, "authenticator code");
           return;
         }
         if (webauthnAvailableMfa) {
           await verifySecurityKey(challengeId);
           return;
         }
+        log("info", "Verify MFA authenticator code", username.trim() || undefined);
         const res = await verifyMfa(challengeId, mfaCode);
-        completeLogin(res.token, res.user);
+        completeLogin(res.token, res.user, "authenticator code");
         return;
       }
+      log("info", "Sign in", username.trim() || undefined);
       const res = await login(username, password);
       if ("mfa_required" in res && res.mfa_required) {
         setChallengeId(res.challenge_id);
         setTotpAvailable(!!res.totp_available);
         setWebauthnAvailableMfa(!!res.webauthn_available);
+        const factors = [
+          res.totp_available ? "authenticator" : null,
+          res.webauthn_available ? "security key" : null,
+        ]
+          .filter(Boolean)
+          .join(" + ");
+        log("info", "MFA required", factors || undefined);
         if (res.webauthn_available && !res.totp_available && webauthnAvailable()) {
           await verifySecurityKey(res.challenge_id);
         }
         return;
       }
       if ("token" in res) {
-        completeLogin(res.token, res.user);
+        completeLogin(res.token, res.user, "password");
       }
     } catch (err) {
-      setError(String(err));
+      const msg = String(err);
+      log("error", "Sign-in failed", msg);
+      setError(msg);
     } finally {
       setBusy(false);
     }
@@ -141,7 +162,11 @@ export default function LoginPage() {
               setBusy(true);
               setError("");
               void verifySecurityKey(challengeId)
-                .catch((err) => setError(String(err)))
+                .catch((err) => {
+                  const msg = String(err);
+                  log("error", "MFA security key failed", msg);
+                  setError(msg);
+                })
                 .finally(() => setBusy(false));
             }}
           >

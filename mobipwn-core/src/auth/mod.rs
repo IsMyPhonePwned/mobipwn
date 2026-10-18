@@ -3,6 +3,7 @@ use uuid::Uuid;
 pub mod api_key_cipher;
 pub mod api_keys;
 pub mod permissions;
+pub mod platform_audit;
 pub mod users;
 pub mod webauthn;
 
@@ -55,6 +56,9 @@ pub use users::{
     is_stored_password_hash, list_user_directory, list_users, setup_totp, totp_uri, update_user,
     user_to_record, user_to_record_async, verify_password, verify_session, verify_totp,
     verify_user_totp, ActiveSession, AuthActivity, RecentLogin, UserDirectoryEntry, UserRecord,
+};
+pub use platform_audit::{
+    insert_platform_audit, list_platform_audit, PlatformAuditEvent, PlatformAuditInput,
 };
 pub use webauthn::{
     delete_webauthn_credential, finish_webauthn_authentication, finish_webauthn_registration,

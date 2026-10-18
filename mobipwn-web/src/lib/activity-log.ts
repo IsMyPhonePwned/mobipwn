@@ -277,14 +277,14 @@ function stripApi(url: string): string {
   }
 }
 
-/** Settings-related API paths (reads and writes) for the activity log. */
+/** Settings / auth / MFA API paths (reads and writes) for the activity log. */
 function isSettingsActivityPath(path: string): boolean {
   return (
     /^\/v1\/settings\//.test(path) ||
     /^\/v1\/suppressions/.test(path) ||
     /^\/v1\/notifications\//.test(path) ||
     /^\/v1\/mcp\//.test(path) ||
-    /^\/v1\/auth\/(users|api-keys|totp|me)/.test(path)
+    /^\/v1\/auth\/(users|api-keys|totp|webauthn|me|login|logout|mfa)/.test(path)
   );
 }
 
@@ -326,7 +326,20 @@ function describeApiAction(method: string, url: string): string {
     [/^\/v1\/auth\/totp\/setup$/, "Start MFA setup"],
     [/^\/v1\/auth\/totp\/enable$/, "Enable MFA"],
     [/^\/v1\/auth\/totp\/disable$/, "Disable MFA"],
+    [/^\/v1\/auth\/webauthn\/register\/start$/, "Start security key registration"],
+    [/^\/v1\/auth\/webauthn\/register\/finish$/, "Register security key"],
+    [/^\/v1\/auth\/webauthn\/credentials\/[^/]+$/, "Remove security key"],
+    [/^\/v1\/auth\/webauthn\/credentials$/, "Load security keys"],
+    [/^\/v1\/auth\/mfa\/webauthn\/start$/, "Start MFA security key"],
+    [/^\/v1\/auth\/mfa\/webauthn\/finish$/, "Verify MFA security key"],
+    [/^\/v1\/auth\/mfa$/, "Verify MFA authenticator code"],
+    [/^\/v1\/auth\/login$/, "Sign in"],
+    [/^\/v1\/auth\/logout$/, "Sign out"],
     [/^\/v1\/auth\/me$/, "Load account profile"],
+    [
+      /^\/v1\/settings\/webauthn_config$/,
+      method === "GET" ? "Load security key site settings" : "Save security key site settings",
+    ],
     [/^\/v1\/mcp\/status$/, "Load MCP status"],
     [/^\/v1\/mcp\/start$/, "Start MCP server"],
     [/^\/v1\/mcp\/stop$/, "Stop MCP server"],

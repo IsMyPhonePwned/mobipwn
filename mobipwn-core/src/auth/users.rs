@@ -561,6 +561,8 @@ pub struct AuthActivity {
     pub active_sessions: i64,
     pub connected: Vec<ActiveSession>,
     pub recent_logins: Vec<RecentLogin>,
+    #[serde(default)]
+    pub recent_audit: Vec<super::platform_audit::PlatformAuditEvent>,
 }
 
 pub async fn fetch_auth_activity(pool: &PgPool) -> anyhow::Result<Option<AuthActivity>> {
@@ -622,12 +624,21 @@ pub async fn fetch_auth_activity(pool: &PgPool) -> anyhow::Result<Option<AuthAct
     })
     .collect();
 
+    let recent_audit = match super::platform_audit::list_platform_audit(pool, 80).await {
+        Ok(rows) => rows,
+        Err(e) => {
+            tracing::warn!(error = %e, "platform audit list failed");
+            Vec::new()
+        }
+    };
+
     Ok(Some(AuthActivity {
         password_storage: "argon2",
         total_users,
         active_sessions,
         connected,
         recent_logins,
+        recent_audit,
     }))
 }
 

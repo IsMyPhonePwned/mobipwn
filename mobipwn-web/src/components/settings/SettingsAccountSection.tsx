@@ -37,7 +37,9 @@ export function SettingsAccountSection() {
     try {
       setKeys(await listWebauthnCredentials());
     } catch (e) {
-      setMsg(String(e));
+      const msg = String(e);
+      log("error", "Load security keys failed", msg);
+      setMsg(msg);
     }
   };
 
@@ -73,7 +75,7 @@ export function SettingsAccountSection() {
       body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
-    log("info", "Save security key settings", body.origin || body.rp_id);
+    log("info", "Save security key site settings", body.origin || body.rp_id || undefined);
     setMsg("Security key site settings saved.");
   };
 
@@ -81,16 +83,25 @@ export function SettingsAccountSection() {
     setKeyBusy(true);
     setMsg("");
     try {
+      if (onLoopback) {
+        throw new Error(
+          "Open the console at localhost (not 127.0.0.1) before enrolling a YubiKey."
+        );
+      }
+      log("info", "Start security key registration", keyName.trim() || undefined);
       const site = siteArgs();
       const start = await startWebauthnRegister(site);
-      const credential = await createSecurityKey(start);
+      const { challenge_id: _challengeId, ...creationOptions } = start;
+      const credential = await createSecurityKey(creationOptions);
       const saved = await finishWebauthnRegister(start.challenge_id, credential, site, keyName);
       log("info", "Register security key", saved.name);
       setMsg(`Registered ${saved.name}.`);
       await loadKeys();
       await refresh();
     } catch (e) {
-      setMsg(String(e));
+      const msg = String(e);
+      log("error", "Register security key failed", msg);
+      setMsg(msg);
     } finally {
       setKeyBusy(false);
     }
@@ -129,7 +140,11 @@ export function SettingsAccountSection() {
                     setUri(r.uri);
                     setMsg("Scan the QR code, then enter a 6-digit code below.");
                   })
-                  .catch((e) => setMsg(String(e)))
+                  .catch((e) => {
+                    const msg = String(e);
+                    log("error", "Start MFA setup failed", msg);
+                    setMsg(msg);
+                  })
               }
             >
               Set up authenticator app
@@ -166,7 +181,11 @@ export function SettingsAccountSection() {
                         setCode("");
                         await refresh();
                       })
-                      .catch((e) => setMsg(String(e)))
+                      .catch((e) => {
+                        const msg = String(e);
+                        log("error", "Enable MFA failed", msg);
+                        setMsg(msg);
+                      })
                   }
                 >
                   Enable authenticator
@@ -188,7 +207,11 @@ export function SettingsAccountSection() {
                 setMsg("Authenticator app disabled.");
                 await refresh();
               })
-              .catch((e) => setMsg(String(e)))
+              .catch((e) => {
+                const msg = String(e);
+                log("error", "Disable MFA failed", msg);
+                setMsg(msg);
+              })
           }
         >
           Disable authenticator app
@@ -229,7 +252,11 @@ export function SettingsAccountSection() {
             type="button"
             className="btn btn-ghost"
             onClick={() =>
-              void saveWebauthnSettings().catch((e) => setMsg(String(e)))
+              void saveWebauthnSettings().catch((e) => {
+                const msg = String(e);
+                log("error", "Save security key site settings failed", msg);
+                setMsg(msg);
+              })
             }
           >
             Save site settings
@@ -259,7 +286,11 @@ export function SettingsAccountSection() {
                       await loadKeys();
                       await refresh();
                     })
-                    .catch((e) => setMsg(String(e)))
+                    .catch((e) => {
+                      const msg = String(e);
+                      log("error", "Remove security key failed", msg);
+                      setMsg(msg);
+                    })
                 }
               >
                 Remove

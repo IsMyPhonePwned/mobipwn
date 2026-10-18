@@ -90,12 +90,26 @@ type RecentLogin = {
   last_login_at: string;
 };
 
+type PlatformAuditEvent = {
+  id: string;
+  created_at: string;
+  actor: string;
+  action: string;
+  method: string;
+  path: string;
+  status: number;
+  detail?: string | null;
+  client_ip?: string | null;
+  user_agent?: string | null;
+};
+
 type AuthActivity = {
   password_storage: string;
   total_users: number;
   active_sessions: number;
   connected: ActiveSession[];
   recent_logins: RecentLogin[];
+  recent_audit?: PlatformAuditEvent[];
 };
 
 type ApiKeyUserUsage = {
@@ -772,6 +786,51 @@ export default function HealthPage() {
                           <td className="mono">{u.username}</td>
                           <td>{u.role}</td>
                           <td className="muted">{formatWhen(u.last_login_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <h3 className="text-sm font-medium" style={{ margin: "16px 0 8px" }}>
+                Audit trail
+              </h3>
+              <p className="muted text-xs" style={{ marginBottom: 8 }}>
+                Durable server log of sign-in, MFA / YubiKey, settings, and high-value mutations (rules,
+                cases, alerts, ingest, keys).
+              </p>
+              {!data.auth.recent_audit?.length ? (
+                <p className="muted inbox-empty">No platform audit events yet.</p>
+              ) : (
+                <div className="health-table-wrap">
+                  <table className="data-table ops-compact-table health-crate-table">
+                    <thead>
+                      <tr>
+                        <th>When</th>
+                        <th>Actor</th>
+                        <th>Action</th>
+                        <th>Status</th>
+                        <th>IP</th>
+                        <th>Detail</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.auth.recent_audit.map((ev) => (
+                        <tr key={ev.id}>
+                          <td className="muted">{formatWhen(ev.created_at)}</td>
+                          <td className="mono">{ev.actor}</td>
+                          <td>
+                            {ev.action}
+                            <div className="muted text-xs">
+                              {ev.method} {ev.path}
+                            </div>
+                          </td>
+                          <td className={ev.status >= 400 ? "error" : "muted"}>{ev.status}</td>
+                          <td className="mono muted text-xs">{ev.client_ip || "—"}</td>
+                          <td className="muted text-xs" title={ev.user_agent ?? undefined}>
+                            {ev.detail || "—"}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

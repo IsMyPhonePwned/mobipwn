@@ -242,7 +242,15 @@ function AppShellInner() {
           <ActivityLogButton />
           {hasPermission(user, "llm_use") && <AssistantSummon />}
           {user && (
-            <button type="button" className="btn btn-ghost btn-sm topbar-user" onClick={() => void logout()} title={user.username}>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm topbar-user"
+              onClick={() => {
+                log("info", "Sign out", user.username);
+                void logout();
+              }}
+              title={user.username}
+            >
               <span className="topbar-user-name">{user.username}</span>
               <span className="muted topbar-user-role">{user.role}</span>
             </button>
