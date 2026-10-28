@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 
 use serde_json::{json, Map, Value};
 use sysdiagnose_extractor_library::{
@@ -163,7 +164,7 @@ fn parsed_map_from_results(
     let mut parsed = HashMap::new();
     for (pt, result, _) in results {
         if let Ok(v) = result {
-            parsed.insert(parser_type_slug(*pt), v.clone());
+            parsed.insert(parser_type_slug(*pt), Arc::new(v.clone()));
         }
     }
     parsed
@@ -182,9 +183,9 @@ fn parsed_map_for_analysers(
                 if let Some(obj) = slim.as_object_mut() {
                     obj.insert("events".into(), json!([]));
                 }
-                parsed.insert(slug, slim);
+                parsed.insert(slug, Arc::new(slim));
             } else {
-                parsed.insert(slug, v.clone());
+                parsed.insert(slug, Arc::new(v.clone()));
             }
         }
     }
