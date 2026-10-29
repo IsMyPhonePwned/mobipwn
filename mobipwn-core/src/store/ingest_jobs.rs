@@ -40,6 +40,7 @@ impl IngestJobOptions {
             logarchive_decode_max_lines: self.logarchive_decode_max_lines,
             max_entry_mb: self.max_entry_mb,
             ioservice_full_tree: self.ioservice_full_tree,
+            parser_threads: None,
         }
     }
 }
@@ -385,12 +386,75 @@ impl IngestJobRepository {
     pub async fn mark_pending(&self, id: Uuid) -> anyhow::Result<()> {
         sqlx::query(
             "UPDATE ingest_jobs SET status = 'pending', error = NULL, finished_at = NULL, \
-             stage = 'queued', stage_detail = 'Queued for server processing…', progress_json = NULL WHERE id = $1",
+             stage = 'queued', stage_detail = 'Queued for server processing…', \
+             progress_json = CASE \
+               WHEN progress_json IS NOT NULL AND progress_json ? 'options' \
+                 THEN jsonb_build_object('options', progress_json->'options') \
+               ELSE NULL \
+             END \
+             WHERE id = $1",
         )
         .bind(id)
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    /// Atomically claim a `pending` job for a worker. Returns false if another worker already claimed it.
+    pub async fn try_claim_pending(&self, id: Uuid) -> anyhow::Result<bool> {
+        let r = sqlx::query(
+            "UPDATE ingest_jobs SET status = 'running', events_count = 0, error = NULL, finished_at = NULL, \
+             stage = 'opening', stage_detail = 'Opening archive…', \
+             progress_json = CASE \
+               WHEN progress_json IS NOT NULL AND progress_json ? 'options' \
+                 THEN jsonb_build_object('options', progress_json->'options') \
+               ELSE NULL \
+             END \
+             WHERE id = $1 AND status = 'pending'",
+        )
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+        Ok(r.rows_affected() > 0)
+    }
+
+    /// Claim the oldest pending job (multi-host safe via `FOR UPDATE SKIP LOCKED`).
+    pub async fn claim_next_pending(&self) -> anyhow::Result<Option<IngestJob>> {
+        let mut tx = self.pool.begin().await?;
+        let id: Option<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM ingest_jobs WHERE status = 'pending' \
+             ORDER BY created_at ASC FOR UPDATE SKIP LOCKED LIMIT 1",
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+        let Some(id) = id else {
+            tx.rollback().await?;
+            return Ok(None);
+        };
+        sqlx::query(
+            "UPDATE ingest_jobs SET status = 'running', events_count = 0, error = NULL, finished_at = NULL, \
+             stage = 'opening', stage_detail = 'Opening archive…', \
+             progress_json = CASE \
+               WHEN progress_json IS NOT NULL AND progress_json ? 'options' \
+                 THEN jsonb_build_object('options', progress_json->'options') \
+               ELSE NULL \
+             END \
+             WHERE id = $1 AND status = 'pending'",
+        )
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        self.get(id).await
+    }
+
+    pub async fn count_pending(&self) -> anyhow::Result<i64> {
+        let (n,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*)::bigint FROM ingest_jobs WHERE status = 'pending'",
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(n)
     }
 
     pub async fn update_stage(
@@ -518,6 +582,18 @@ impl IngestJobRepository {
         .fetch_all(&self.pool)
         .await?;
         Ok(rows.into_iter().collect())
+    }
+
+    /// Jobs that still need parse/insert after API restart (`pending`, or `running` with an archive on disk).
+    pub async fn list_recoverable(&self) -> anyhow::Result<Vec<IngestJob>> {
+        let rows = sqlx::query_as::<_, JobRow>(&format!(
+            "{JOB_SELECT} WHERE status = 'pending' \
+             OR (status = 'running' AND archive_path IS NOT NULL AND archive_path <> '') \
+             ORDER BY created_at ASC"
+        ))
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows.into_iter().map(row_to_job).collect())
     }
 
     pub async fn list_recent(&self, limit: i64) -> anyhow::Result<Vec<IngestJob>> {

@@ -25,7 +25,8 @@ pub fn sanitize_file_name(name: &str) -> String {
         .collect()
 }
 
-/// Copy an ingest archive into durable blob storage; returns absolute storage path.
+/// Copy an ingest archive into durable **local** blob storage; returns absolute storage path.
+/// Prefer [`crate::archive_store::persist_archive`] when S3 may be configured.
 pub fn persist_collect_blob(
     source_path: &Path,
     file_name: &str,
@@ -40,6 +41,10 @@ pub fn persist_collect_blob(
 }
 
 pub fn delete_collect_blob_file(storage_path: &str) -> anyhow::Result<()> {
+    if storage_path.starts_with("s3://") {
+        // Async S3 delete is handled by archive_store; ignore sync path for remote URIs.
+        return Ok(());
+    }
     let path = Path::new(storage_path);
     if path.exists() {
         std::fs::remove_file(path)?;

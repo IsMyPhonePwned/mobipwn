@@ -151,6 +151,14 @@ type IntegrationsHealth = {
   };
 };
 
+type IngestPoolHealth = {
+  workers: number;
+  queued: number;
+  active: number;
+  max_queue?: number | null;
+  saturated?: boolean;
+};
+
 type HealthDetail = {
   version?: string;
   postgres: ComponentHealth;
@@ -158,6 +166,7 @@ type HealthDetail = {
   alerting_rules: number;
   failed_rules_24h: number;
   pending_ingest_jobs: number;
+  ingest_pool?: IngestPoolHealth | null;
   process: ProcessStats;
   crates: CrateProcessStats[];
   docker_containers?: DockerContainerStats[];
@@ -1046,6 +1055,29 @@ export default function HealthPage() {
                   {data.pending_ingest_jobs}
                 </div>
               </div>
+              {data.ingest_pool && (
+                <div className="stat-card">
+                  <div className="muted">Ingest workers</div>
+                  <div className="stat-value">
+                    {data.ingest_pool.active}/{data.ingest_pool.workers}
+                    {data.ingest_pool.queued > 0 ? (
+                      <span className="muted" style={{ fontSize: "0.75em", marginLeft: 6 }}>
+                        · {data.ingest_pool.queued} queued
+                      </span>
+                    ) : null}
+                    {data.ingest_pool.max_queue != null && data.ingest_pool.max_queue > 0 ? (
+                      <span className="muted" style={{ fontSize: "0.75em", marginLeft: 6 }}>
+                        · cap {data.ingest_pool.max_queue}
+                      </span>
+                    ) : null}
+                    {data.ingest_pool.saturated ? (
+                      <span className="health-stat-warn" style={{ fontSize: "0.75em", marginLeft: 6 }}>
+                        · saturated
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="health-jobs-control">
               <p className="muted health-jobs-control-hint">

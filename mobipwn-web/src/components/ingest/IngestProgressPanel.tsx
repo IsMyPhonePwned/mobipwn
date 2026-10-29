@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useLocale } from "@/contexts/LocaleContext";
 import type {
   IngestParserProgress,
@@ -21,13 +22,15 @@ type Props = {
 };
 
 function formatElapsed(ms: number | null | undefined): string {
-  if (ms == null || ms <= 0) return "";
-  if (ms < 1000) return `${ms} ms`;
-  const sec = ms / 1000;
-  if (sec < 60) return `${sec.toFixed(1)} s`;
+  if (ms == null || ms < 0) return "";
+  if (ms < 1000) return `${Math.max(0, Math.floor(ms))} ms`;
+  const sec = Math.floor(ms / 1000);
+  if (sec < 60) return `${sec}s`;
   const min = Math.floor(sec / 60);
-  const rem = Math.round(sec % 60);
-  return `${min}m ${rem}s`;
+  const rem = sec % 60;
+  if (min < 60) return `${min}m ${rem.toString().padStart(2, "0")}s`;
+  const hr = Math.floor(min / 60);
+  return `${hr}h ${(min % 60).toString().padStart(2, "0")}m`;
 }
 
 function LogarchiveDebug({ la }: { la: LogarchiveDecodeProgress }) {
@@ -116,10 +119,37 @@ export function IngestProgressPanel({
   steps,
 }: Props) {
   const { t } = useLocale();
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!visible) {
+      setStartedAt(null);
+      return;
+    }
+    setStartedAt((prev) => prev ?? Date.now());
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [visible]);
+
   if (!visible) return null;
 
   const clamped = Math.min(100, Math.max(0, percent));
+  const isQueued = stage === "queued" || stage === "waiting";
+  const isBusy =
+    !isQueued &&
+    (stage === "parsing" ||
+      stage === "logarchive" ||
+      stage === "opening" ||
+      stage === "anonymizing" ||
+      stage === "inserting" ||
+      stage === "verifying" ||
+      stage === "syncing" ||
+      clamped > 0);
+  const indeterminate = isQueued || (clamped > 0 && clamped < 5);
   const showLogarchive = Boolean(logarchive) || stage === "logarchive";
+  const elapsedLabel =
+    startedAt != null ? formatElapsed(now - startedAt) : "";
   const sortedParsers = parsers?.length
     ? [...parsers].sort((a, b) => {
         const rank = (p: IngestParserProgress) =>
@@ -128,16 +158,50 @@ export function IngestProgressPanel({
       })
     : undefined;
 
+  const rootClass = [
+    "ingest-progress",
+    isQueued ? "ingest-progress--queued" : "",
+    isBusy ? "ingest-progress--busy" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div className="ingest-progress" role="status" aria-live="polite">
+    <div className={rootClass} role="status" aria-live="polite">
       <div className="ingest-progress__header">
-        <span className="ingest-progress__title">{title}</span>
-        <span className="ingest-progress__pct mono">{clamped}%</span>
+        <div className="ingest-progress__title-row">
+          <span className="ingest-progress__pulse" aria-hidden />
+          <span className="ingest-progress__title">{title}</span>
+          {isQueued ? (
+            <span className="ingest-progress__badge ingest-progress__badge--queue">
+              {t("ingest.queueBadge")}
+            </span>
+          ) : null}
+        </div>
+        <div className="ingest-progress__header-meta">
+          {elapsedLabel ? (
+            <span className="ingest-progress__elapsed mono muted" title={t("ingest.elapsed")}>
+              {elapsedLabel}
+            </span>
+          ) : null}
+          <span className="ingest-progress__pct mono">
+            {indeterminate ? "…" : `${clamped}%`}
+          </span>
+        </div>
       </div>
-      <div className="ingest-progress__bar" aria-hidden>
-        <div className="ingest-progress__fill" style={{ width: `${clamped}%` }} />
+      <div
+        className={`ingest-progress__bar${indeterminate ? " ingest-progress__bar--indeterminate" : ""}`}
+        aria-hidden
+      >
+        <div
+          className={`ingest-progress__fill${indeterminate ? " ingest-progress__fill--indeterminate" : ""}`}
+          style={indeterminate ? undefined : { width: `${clamped}%` }}
+        />
       </div>
       <p className="ingest-progress__phase">{phaseLabel}</p>
+      {isQueued ? (
+        <p className="ingest-progress__detail muted">{t("ingest.queuedHint")}</p>
+      ) : null}
       {parsersActive && parsersActive.length > 0 && stage === "parsing" ? (
         <p className="ingest-progress__detail mono muted">
           Active: {parsersActive.slice(0, 6).join(", ")}

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { RotateCcw } from "lucide-react";
+import { Archive, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CasePlatformIcon } from "@/components/icons/PlatformIcons";
 import { useAuth } from "@/contexts/AuthContext";
 import { buildSearchHref } from "@/lib/mplQuery";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiPost } from "@/lib/api";
 import {
   CaseReingestPanel,
   type CaseReingestPanelHandle,
@@ -30,14 +30,18 @@ import {
 import { CaseDashboardTabs } from "@/components/cases/CaseDashboardTabs";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { inferCasePlatform } from "@/lib/caseDashboard";
+import { caseIsArchived } from "@/lib/casePresentation";
 import { useDocumentVisible } from "@/lib/useDocumentVisible";
+import { useLocale } from "@/contexts/LocaleContext";
 
 export default function CaseDetailPage() {
   const { id = "" } = useParams();
   const { user } = useAuth();
+  const { t } = useLocale();
   const canWriteCases = hasPermission(user, "cases_write");
   const canWriteAlerts = hasPermission(user, "alerts_write");
   const canIngest = hasPermission(user, "ingest_write");
+  const canArchiveIngest = hasPermission(user, "data_admin");
   const tabVisible = useDocumentVisible();
   const [caseRec, setCaseRec] = useState<CaseRecord | null>(null);
   const [jobs, setJobs] = useState<CaseIngestJob[]>([]);
@@ -121,13 +125,24 @@ export default function CaseDetailPage() {
   if (loading) return <p className="muted">Loading case…</p>;
   if (!caseRec) return <p className="error">{error || "Case not found"}</p>;
 
+  const archived = caseIsArchived(caseRec);
+
   return (
-    <>
+    <div className={archived ? "case-detail case-detail--archived" : "case-detail"}>
       <PageHeader
-        title={caseRec.title}
+        title={
+          <span className="case-detail__title-row">
+            {archived ? <Archive size={22} aria-hidden className="case-detail__title-icon" /> : null}
+            {caseRec.title}
+            {archived ? (
+              <span className="case-detail__archived-badge">{t("cases.searchArchivedBadge")}</span>
+            ) : null}
+          </span>
+        }
         meta={
           <span className="muted">
             <Link to="/cases/search">Cases</Link> / {caseRec.title}
+            {archived ? ` · ${t("cases.searchArchivedBadge")}` : ""}
           </span>
         }
         description={
@@ -171,7 +186,7 @@ export default function CaseDetailPage() {
           <>
             {caseRec.ingest_source && canIngest && (
               <Button
-                variant="secondary"
+                variant={archived ? "default" : "secondary"}
                 disabled={actionBusy}
                 onClick={() => {
                   document.getElementById("case-reingest")?.scrollIntoView({ behavior: "smooth" });
@@ -179,10 +194,45 @@ export default function CaseDetailPage() {
                 }}
               >
                 <RotateCcw size={14} aria-hidden />
-                Re-ingest
+                {archived ? t("cases.detailArchivedReingestCta") : "Re-ingest"}
               </Button>
             )}
-            {caseRec.ingest_source && (
+            {caseRec.ingest_source && canArchiveIngest && !archived && (
+              <Button
+                variant="secondary"
+                disabled={actionBusy}
+                title="Clear ClickHouse events, keep blob and case"
+                onClick={() => {
+                  const source = caseRec.ingest_source!;
+                  if (
+                    !window.confirm(
+                      `Archive ingest "${source}"?\n\n` +
+                        "Removes ClickHouse events and alerts for this source, but keeps the stored archive blob and this case so you can re-ingest later."
+                    )
+                  ) {
+                    return;
+                  }
+                  setActionBusy(true);
+                  void apiPost<{
+                    events_deleted: number;
+                    blobs_retained: number;
+                    cases_tagged: number;
+                    alerts_removed?: number;
+                  }>("/v1/data/sources/archive", { source })
+                    .then(() => {
+                      setError("");
+                      void load();
+                      setDashboardKey((k) => k + 1);
+                    })
+                    .catch((e) => setError(String(e)))
+                    .finally(() => setActionBusy(false));
+                }}
+              >
+                <Archive size={14} aria-hidden />
+                Archive
+              </Button>
+            )}
+            {caseRec.ingest_source && !archived && (
               <Button variant="secondary" asChild>
                 <Link to={buildSearchHref(`source="${caseRec.ingest_source}"`, { run: true })}>
                   Search events
@@ -231,6 +281,29 @@ export default function CaseDetailPage() {
         }
       />
 
+      {archived && (
+        <div className="case-detail__archived-banner" role="status">
+          <Archive size={18} aria-hidden />
+          <div className="case-detail__archived-banner-text">
+            <strong>{t("cases.detailArchivedTitle")}</strong>
+            <span className="muted text-sm">{t("cases.detailArchivedBody")}</span>
+          </div>
+          {caseRec.ingest_source && canIngest ? (
+            <Button
+              size="sm"
+              disabled={actionBusy}
+              onClick={() => {
+                document.getElementById("case-reingest")?.scrollIntoView({ behavior: "smooth" });
+                reingestPanelRef.current?.reingestLatest();
+              }}
+            >
+              <RotateCcw size={14} aria-hidden />
+              {t("cases.detailArchivedReingestCta")}
+            </Button>
+          ) : null}
+        </div>
+      )}
+
       <CaseInvestigationPanel
         caseRec={caseRec}
         wall={wall}
@@ -277,6 +350,6 @@ export default function CaseDetailPage() {
           Refresh
         </Button>
       </div>
-    </>
+    </div>
   );
 }

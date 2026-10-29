@@ -8,6 +8,7 @@ const COLLECTOR_TAGS = new Set(["public-collect", "webusb", "collector"]);
 
 const HIDDEN_TAGS = new Set([
   "ingested",
+  "archived",
   "android",
   "ios",
   "endpoint",
@@ -19,6 +20,11 @@ const HIDDEN_TAGS = new Set([
   "iphone",
   "ipad",
 ]);
+
+/** Cold-archived: ClickHouse events cleared, blob retained (`archived` tag). */
+export function caseIsArchived(caseRec: Pick<CaseRecord, "tags">): boolean {
+  return (caseRec.tags ?? []).some((t) => t.trim().toLowerCase() === "archived");
+}
 
 export const PLATFORM_LABELS: Record<CasePlatform, string> = {
   android: "Android",

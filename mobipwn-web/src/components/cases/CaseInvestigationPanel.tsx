@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from
 import { Link } from "react-router-dom";
 import {
   Activity,
+  Archive,
   ArrowRight,
   Ban,
   Bell,
@@ -12,6 +13,8 @@ import {
   Upload,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { caseIsArchived } from "@/lib/casePresentation";
+import { useLocale } from "@/contexts/LocaleContext";
 import { Button } from "@/components/ui/button";
 import { CaseAnalystComment } from "@/components/cases/CaseAnalystComment";
 import { CaseTagsEditor } from "@/components/cases/CaseTagsEditor";
@@ -472,10 +475,12 @@ export function CaseInvestigationPanel({
   onAlertStatusChanged?: (alertId: string, status: string) => void | Promise<void>;
   onError?: (message: string) => void;
 }) {
+  const { t } = useLocale();
   const [editTitle, setEditTitle] = useState(caseRec.title);
   const [renameSource, setRenameSource] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
+  const archived = caseIsArchived(caseRec);
 
   useEffect(() => {
     if (!renaming) {
@@ -499,14 +504,24 @@ export function CaseInvestigationPanel({
   };
 
   return (
-    <section className="case-hub card">
+    <section className={`case-hub card${archived ? " case-hub--archived" : ""}`}>
       <header className="case-hub__header">
         <div className="case-hub__header-main">
           <h2 className="case-hub__title">Investigation</h2>
           <div className="case-hub__chips">
+            {archived ? (
+              <span className="case-hub-chip case-hub-chip--archived">
+                <Archive size={12} aria-hidden />
+                {t("cases.searchArchivedBadge")}
+              </span>
+            ) : null}
             <Badge variant={caseStatusVariant(caseRec.status)}>{caseRec.status}</Badge>
             <span className="case-hub-chip">{caseRec.priority} priority</span>
-            <span className="case-hub-chip mono">{eventTotal.toLocaleString()} events</span>
+            <span className="case-hub-chip mono">
+              {archived
+                ? t("cases.searchArchivedNoEvents")
+                : `${eventTotal.toLocaleString()} events`}
+            </span>
             <span className="case-hub-chip mono">
               {alerts.length} alert{alerts.length === 1 ? "" : "s"}
             </span>

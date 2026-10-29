@@ -7,6 +7,7 @@ export type SysdiagnoseIngestConfig = {
   ioservice_full_tree: boolean;
   logarchive_uncapped: boolean;
   max_entry_mb: number;
+  parser_threads: number;
 };
 
 export const DEFAULT_SYSDIAGNOSE_INGEST_CONFIG: SysdiagnoseIngestConfig = {
@@ -14,6 +15,7 @@ export const DEFAULT_SYSDIAGNOSE_INGEST_CONFIG: SysdiagnoseIngestConfig = {
   ioservice_full_tree: false,
   logarchive_uncapped: false,
   max_entry_mb: 64,
+  parser_threads: 2,
 };
 
 type Props = {
@@ -44,6 +46,10 @@ export function SettingsSysdiagnoseIngestSection({ disabled = false, onMessage }
             typeof body.max_entry_mb === "number"
               ? body.max_entry_mb
               : DEFAULT_SYSDIAGNOSE_INGEST_CONFIG.max_entry_mb,
+          parser_threads:
+            typeof body.parser_threads === "number"
+              ? body.parser_threads
+              : DEFAULT_SYSDIAGNOSE_INGEST_CONFIG.parser_threads,
         });
       }
     } finally {

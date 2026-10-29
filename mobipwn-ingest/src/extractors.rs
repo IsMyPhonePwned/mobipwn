@@ -281,6 +281,7 @@ pub fn parse_ios_sysdiagnose(
     on_progress: Option<SysdiagnoseProgressFn>,
     parse_options: sysdiagnose_extractor_library::ParseOptions,
     archive_options: sysdiagnose_extractor_library::ArchiveOptions,
+    parser_threads: Option<usize>,
 ) -> anyhow::Result<(Vec<MudmEvent>, SysdiagnoseParseReport)> {
     use std::sync::Arc;
     use strum::IntoEnumIterator;
@@ -329,6 +330,7 @@ pub fn parse_ios_sysdiagnose(
         Arc::clone(&arch),
         parsers,
         on_progress.clone(),
+        parser_threads,
     );
 
     crate::ios_logarchive_decode::augment_logarchive_parser_output(
@@ -429,6 +431,13 @@ pub fn ingest_ios_sysdiagnose(
     parse_options: sysdiagnose_extractor_library::ParseOptions,
     archive_options: sysdiagnose_extractor_library::ArchiveOptions,
 ) -> anyhow::Result<Vec<MudmEvent>> {
-    parse_ios_sysdiagnose(archive, source_label, None, parse_options, archive_options)
-        .map(|(events, _)| events)
+    parse_ios_sysdiagnose(
+        archive,
+        source_label,
+        None,
+        parse_options,
+        archive_options,
+        None,
+    )
+    .map(|(events, _)| events)
 }

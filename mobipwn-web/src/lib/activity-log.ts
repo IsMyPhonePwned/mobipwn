@@ -302,6 +302,7 @@ function describeApiAction(method: string, url: string): string {
     [/^\/v1\/ingest\/upload\//, "Ingest upload chunk"],
     [/^\/v1\/ingest\/jobs\//, "Poll ingest job"],
     [/^\/v1\/data\/sources\/delete/, "Delete ingest source"],
+    [/^\/v1\/data\/sources\/archive/, "Archive ingest source"],
     [/^\/v1\/rules\/[^/]+\/run/, "Run detection rule"],
     [/^\/v1\/rules\/[^/]+\/validate/, "Validate detection rule"],
     [/^\/v1\/rules\/import-sigma/, "Import Sigma rule"],
@@ -339,6 +340,10 @@ function describeApiAction(method: string, url: string): string {
     [
       /^\/v1\/settings\/webauthn_config$/,
       method === "GET" ? "Load security key site settings" : "Save security key site settings",
+    ],
+    [
+      /^\/v1\/settings\/ingest_pool_config$/,
+      method === "GET" ? "Load ingest worker settings" : "Save ingest worker settings",
     ],
     [/^\/v1\/mcp\/status$/, "Load MCP status"],
     [/^\/v1\/mcp\/start$/, "Start MCP server"],

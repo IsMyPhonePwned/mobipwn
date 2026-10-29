@@ -42,11 +42,16 @@ export function ingestJobToProgress(job: IngestJobDto): IngestProgress {
           : job.stage_detail || undefined,
     };
   }
+  const stage =
+    job.stage ||
+    (job.status === "pending" ? "queued" : job.status === "running" ? "opening" : undefined);
   return {
-    percent: Math.max(10, job.progress_percent),
+    percent: Math.max(job.status === "pending" ? 88 : 10, job.progress_percent),
     phase: "processing",
-    stage: job.stage,
-    detail: job.stage_detail || undefined,
+    stage,
+    detail:
+      job.stage_detail ||
+      (job.status === "pending" ? "Waiting for an ingest worker…" : undefined),
     parsers: parsers?.length ? parsers : undefined,
     parsersCompleted: job.progress?.parsers_completed,
     parsersTotal: job.progress?.parsers_total,

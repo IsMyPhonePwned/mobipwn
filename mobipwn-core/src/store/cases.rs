@@ -330,6 +330,23 @@ impl CaseRepository {
         self.get(id).await
     }
 
+    /// Tag every case tied to an ingest source (e.g. add `archived` after cold-archiving events).
+    pub async fn patch_tags_for_ingest_source(
+        &self,
+        source: &str,
+        add: &[String],
+        remove: &[String],
+    ) -> anyhow::Result<u64> {
+        let ids = self.find_ids_for_ingest_source(source).await?;
+        let mut n = 0u64;
+        for id in ids {
+            if self.patch_tags(id, add, remove).await?.is_some() {
+                n += 1;
+            }
+        }
+        Ok(n)
+    }
+
     pub async fn patch_tags(
         &self,
         id: Uuid,

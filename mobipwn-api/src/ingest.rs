@@ -12,8 +12,9 @@ use mobipwn_core::mudm::stamp_ingest_tags;
 use mobipwn_core::{CollectBlob, IngestJob, NewCollectBlob};
 use mobipwn_core::mudm::MudmEvent;
 use mobipwn_core::store::{IngestJobOptions, IngestJobProgress};
+use crate::ingest_pool::SubmitResult;
 use mobipwn_ingest::{
-    anonymize_archive_file, insert_events_with_progress, parse_android_bugreport,
+    anonymize_archive_file, insert_events_draining, parse_android_bugreport,
     parse_ios_sysdiagnose, sysdiagnose_archive_options_from_config,
     sysdiagnose_parse_options_from_config, AnonymizeIngestOptions, BugreportParseReport,
     SysdiagnoseParseReport, SysdiagnoseProgressFn,
@@ -135,9 +136,13 @@ pub(crate) async fn sync_case_after_ingest(
         .await
     {
         Ok((case, is_new)) => {
-            if !extra_tags.is_empty() {
-                let _ = state.cases.patch_tags(case.id, extra_tags, &[]).await;
+            let mut add: Vec<String> = extra_tags.to_vec();
+            if !add.iter().any(|t| t.eq_ignore_ascii_case("ingested")) {
+                add.push("ingested".into());
             }
+            // Re-ingest after cold-archive restores live data — drop archived tag.
+            let remove = ["archived".to_string()];
+            let _ = state.cases.patch_tags(case.id, &add, &remove).await;
             if is_new {
                 crate::case_audit::audit_ingest_case_created(state, &case).await;
             }
@@ -158,7 +163,9 @@ fn platform_slug(platform: &str) -> Result<&'static str, IngestErr> {
 }
 
 fn upload_dir() -> PathBuf {
-    std::env::temp_dir().join("mobipwn_uploads")
+    std::env::var("MOBIPWN_UPLOAD_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| std::env::temp_dir().join("mobipwn_uploads"))
 }
 
 fn archive_path_for(job_id: Uuid, file_name: &str) -> PathBuf {
@@ -520,6 +527,23 @@ pub async fn complete_upload(
         ));
     }
 
+    match state.ingest_pool.try_reserve(&state).await {
+        SubmitResult::Queued => {}
+        SubmitResult::Saturated {
+            workers,
+            queued,
+            active,
+            max_queue,
+        } => {
+            return Err(api_error(
+                StatusCode::TOO_MANY_REQUESTS,
+                format!(
+                    "ingest queue full ({queued} pending, max {max_queue}; {active}/{workers} workers busy). Retry later or raise Settings → Ingest workers → max queue."
+                ),
+            ));
+        }
+    }
+
     state
         .ingest_jobs
         .mark_pending(job_id)
@@ -535,7 +559,7 @@ pub async fn complete_upload(
         "ingest upload complete, parsing queued"
     );
 
-    spawn_process_job(state.clone(), job_id);
+    state.ingest_pool.submit(job_id);
 
     Ok(Json(ingest_result(0, Some(job_id), Some("pending"), false)))
 }
@@ -707,124 +731,167 @@ async fn check_dedup(
     Ok(None)
 }
 
-fn spawn_process_job(state: AppState, job_id: Uuid) {
-    tokio::spawn(async move {
-        let job = match state.ingest_jobs.get(job_id).await {
-            Ok(Some(j)) => j,
-            _ => return,
-        };
+/// Parse/insert one queued ingest job (runs on the ingest worker pool).
+pub async fn process_ingest_job(state: AppState, job_id: Uuid) {
+    let job = match state.ingest_jobs.get(job_id).await {
+        Ok(Some(j)) => j,
+        _ => return,
+    };
 
-        let path = match job.archive_path.clone() {
-            Some(p) => p,
-            None => {
+    // Skip if already finished (e.g. duplicate enqueue after recover).
+    if matches!(job.status.as_str(), "done" | "failed") {
+        tracing::debug!(%job_id, status = %job.status, "skip finished ingest job");
+        return;
+    }
+
+    // Pool `claim_next_pending` already sets status=running; only claim if still pending.
+    if job.status == "pending" {
+        match state.ingest_jobs.try_claim_pending(job_id).await {
+            Ok(true) => {}
+            Ok(false) => {
+                tracing::debug!(%job_id, "ingest job already claimed by another worker");
+                return;
+            }
+            Err(e) => {
+                tracing::error!(%job_id, error = %e, "failed to claim ingest job");
+                return;
+            }
+        }
+    } else if job.status != "running" {
+        tracing::debug!(%job_id, status = %job.status, "skip ingest job in unexpected status");
+        return;
+    }
+
+    let location = match job.archive_path.clone() {
+        Some(p) => p,
+        None => {
+            let _ = state
+                .ingest_jobs
+                .finish(job_id, 0, Some("missing archive_path"), None)
+                .await;
+            return;
+        }
+    };
+
+    let (local_path, cleanup_materialized) =
+        match mobipwn_core::materialize_archive(&state.config, &location).await {
+            Ok(v) => v,
+            Err(e) => {
+                let msg = format!("archive unavailable: {e}");
                 let _ = state
                     .ingest_jobs
-                    .finish(job_id, 0, Some("missing archive_path"), None)
+                    .finish(job_id, 0, Some(&msg), None)
                     .await;
+                tracing::error!(%job_id, archive = %location, error = %e, "ingest archive missing");
                 return;
             }
         };
+    let path = local_path.to_string_lossy().into_owned();
 
-        let _ = state.ingest_jobs.mark_running(job_id).await;
-        let user = job.case_user.as_deref();
-        let mut ingest_tags = job.ingest_tags.clone();
+    let user = job.case_user.as_deref();
+    let mut ingest_tags = job.ingest_tags.clone();
 
-        if let Some(anon) = load_anonymize_options(Some(job_id)).filter(|o| o.enabled) {
-            set_job_stage(
-                &state,
-                Some(job_id),
-                "anonymizing",
-                &format!("fakeMustache ({})…", anon.profile),
-                None,
-            )
-            .await;
-            match anonymize_archive_file(FsPath::new(&path), &anon) {
-                Ok(profile) => {
-                    let tag = format!("anonymized:{profile}");
-                    if !ingest_tags.iter().any(|t| t == &tag || t == "anonymized") {
-                        ingest_tags.push("anonymized".into());
-                        ingest_tags.push(tag);
-                    }
-                    tracing::info!(job_id = %job_id, %profile, "archive anonymized before parse");
-                }
-                Err(e) => {
-                    let msg = format!("fakeMustache anonymize failed: {e}");
-                    let _ = state
-                        .ingest_jobs
-                        .finish(job_id, 0, Some(&msg), None)
-                        .await;
-                    tracing::error!(job_id = %job_id, error = %e, "anonymize failed");
-                    return;
-                }
-            }
-        }
-
-        persist_collect_archive(
-            &state,
-            FsPath::new(&path),
-            Some(job_id),
-            &job.source,
-            &job.platform,
-            user,
-            &ingest_tags,
-        )
-        .await;
-        tracing::info!(
-            job_id = %job_id,
-            source = %job.source,
-            platform = %job.platform,
-            file_size = job.file_size,
-            archive = %path,
-            user = user.unwrap_or(""),
-            tags = ?ingest_tags,
-            "ingest parsing started"
-        );
-        let result = process_archive_at_path(
+    if let Some(anon) = load_anonymize_options(Some(job_id)).filter(|o| o.enabled) {
+        set_job_stage(
             &state,
             Some(job_id),
-            FsPath::new(&path),
-            &job.source,
-            &job.platform,
-            user,
-            &ingest_tags,
+            "anonymizing",
+            &format!("fakeMustache ({})…", anon.profile),
+            None,
         )
         .await;
-
-        match result {
-            Ok((n, final_progress)) => {
-                let _ = state
-                    .ingest_jobs
-                    .finish(job_id, n as i32, None, final_progress.as_ref())
-                    .await;
-                let _ = std::fs::remove_file(&path);
-                if let Some(parent) = FsPath::new(&path).parent() {
-                    let _ = std::fs::remove_dir(parent);
+        match anonymize_archive_file(FsPath::new(&path), &anon) {
+            Ok(profile) => {
+                let tag = format!("anonymized:{profile}");
+                if !ingest_tags.iter().any(|t| t == &tag || t == "anonymized") {
+                    ingest_tags.push("anonymized".into());
+                    ingest_tags.push(tag);
                 }
-                tracing::info!(
-                    job_id = %job_id,
-                    source = %job.source,
-                    platform = %job.platform,
-                    events = n,
-                    file_size = job.file_size,
-                    "ingest complete"
-                );
+                tracing::info!(job_id = %job_id, %profile, "archive anonymized before parse");
             }
-            Err((status, Json(err))) => {
+            Err(e) => {
+                let msg = format!("fakeMustache anonymize failed: {e}");
                 let _ = state
                     .ingest_jobs
-                    .finish(job_id, 0, Some(&err.error), None)
+                    .finish(job_id, 0, Some(&msg), None)
                     .await;
-                tracing::error!(
-                    job_id = %job_id,
-                    source = %job.source,
-                    platform = %job.platform,
-                    http_status = %status.as_u16(),
-                    error = %err.error,
-                    "ingest failed"
-                );
+                tracing::error!(job_id = %job_id, error = %e, "anonymize failed");
+                if cleanup_materialized {
+                    let _ = tokio::fs::remove_file(&path).await;
+                }
+                return;
             }
         }
-    });
+    }
+
+    persist_collect_archive(
+        &state,
+        FsPath::new(&path),
+        Some(job_id),
+        &job.source,
+        &job.platform,
+        user,
+        &ingest_tags,
+    )
+    .await;
+    tracing::info!(
+        job_id = %job_id,
+        source = %job.source,
+        platform = %job.platform,
+        file_size = job.file_size,
+        archive = %path,
+        user = user.unwrap_or(""),
+        tags = ?ingest_tags,
+        "ingest parsing started"
+    );
+    let result = process_archive_at_path(
+        &state,
+        Some(job_id),
+        FsPath::new(&path),
+        &job.source,
+        &job.platform,
+        user,
+        &ingest_tags,
+    )
+    .await;
+    if cleanup_materialized {
+        let _ = tokio::fs::remove_file(&path).await;
+    }
+
+    match result {
+        Ok((n, final_progress)) => {
+            let _ = state
+                .ingest_jobs
+                .finish(job_id, n as i32, None, final_progress.as_ref())
+                .await;
+            let _ = std::fs::remove_file(&path);
+            if let Some(parent) = FsPath::new(&path).parent() {
+                let _ = std::fs::remove_dir(parent);
+            }
+            tracing::info!(
+                job_id = %job_id,
+                source = %job.source,
+                platform = %job.platform,
+                events = n,
+                file_size = job.file_size,
+                "ingest complete"
+            );
+        }
+        Err((status, Json(err))) => {
+            let _ = state
+                .ingest_jobs
+                .finish(job_id, 0, Some(&err.error), None)
+                .await;
+            tracing::error!(
+                job_id = %job_id,
+                source = %job.source,
+                platform = %job.platform,
+                http_status = %status.as_u16(),
+                error = %err.error,
+                "ingest failed"
+            );
+        }
+    }
 }
 
 async fn set_job_stage(
@@ -989,7 +1056,12 @@ async fn process_archive_at_path(
             .await;
             let jobs = state.ingest_jobs.clone();
             let insert_job_id = job_id;
-            insert_events_with_progress(&state.clickhouse, &events, Some(move |batch, batches, rows| {
+            let chunk = state.ingest_pool.insert_chunk_size();
+            insert_events_draining(
+                &state.clickhouse,
+                &mut events,
+                chunk,
+                Some(move |batch, batches, rows| {
                 let detail = if batches > 1 {
                     format!("Inserting batch {batch}/{batches} · {rows} events so far")
                 } else {
@@ -1011,7 +1083,8 @@ async fn process_archive_at_path(
                         .update_stage(job_id, "inserting", &detail, Some(&progress))
                         .await;
                 });
-            }))
+            }),
+            )
             .await
             .map_err(|e| api_error(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         }
@@ -1055,6 +1128,7 @@ async fn process_archive_at_path(
                     },
                 ) as SysdiagnoseProgressFn
             });
+            let parser_threads = Some(ingest_cfg.effective_parser_threads());
             let parse_result = tokio::task::spawn_blocking(move || {
                 parse_ios_sysdiagnose(
                     &path_buf,
@@ -1062,6 +1136,7 @@ async fn process_archive_at_path(
                     progress_fn,
                     parse_options,
                     archive_options,
+                    parser_threads,
                 )
             })
             .await
@@ -1102,7 +1177,12 @@ async fn process_archive_at_path(
             .await;
             let jobs = state.ingest_jobs.clone();
             let insert_job_id = job_id;
-            insert_events_with_progress(&state.clickhouse, &events, Some(move |batch, batches, rows| {
+            let chunk = state.ingest_pool.insert_chunk_size();
+            insert_events_draining(
+                &state.clickhouse,
+                &mut events,
+                chunk,
+                Some(move |batch, batches, rows| {
                 let detail = if batches > 1 {
                     format!("Inserting batch {batch}/{batches} · {rows} events so far")
                 } else {
@@ -1124,7 +1204,8 @@ async fn process_archive_at_path(
                         .update_stage(job_id, "inserting", &detail, Some(&progress))
                         .await;
                 });
-            }))
+            }),
+            )
             .await
             .map_err(|e| api_error(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         }
@@ -1255,7 +1336,7 @@ async fn persist_collect_archive(
     };
     match state
         .collect_blobs
-        .insert_from_file(path, meta)
+        .insert_from_file(&state.config, path, meta)
         .await
     {
         Ok(blob) => tracing::info!(
@@ -1322,7 +1403,7 @@ pub async fn store_collect_blob_bytes(
     };
     let blob = state
         .collect_blobs
-        .insert_from_file(&path, meta)
+        .insert_from_file(&state.config, &path, meta)
         .await
         .map_err(|e| api_error(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let _ = std::fs::remove_file(&path);
@@ -1342,12 +1423,15 @@ pub async fn reingest_collect_blob(
         .map_err(|e| api_error(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or_else(|| api_error(StatusCode::NOT_FOUND, "collect archive not found"))?;
 
-    if !std::path::Path::new(&blob.storage_path).exists() {
-        return Err(api_error(
-            StatusCode::NOT_FOUND,
-            "archive file missing on disk",
-        ));
-    }
+    let (local_path, cleanup) =
+        mobipwn_core::materialize_archive(&state.config, &blob.storage_path)
+            .await
+            .map_err(|e| {
+                api_error(
+                    StatusCode::NOT_FOUND,
+                    format!("archive unavailable: {e}"),
+                )
+            })?;
 
     let events_cleared = if clean {
         let cleared = mobipwn_core::clear_ingest_events_for_source(&state.config, &blob.source)
@@ -1412,13 +1496,16 @@ pub async fn reingest_collect_blob(
     let (n, final_progress) = process_archive_at_path(
         state,
         job_id,
-        FsPath::new(&blob.storage_path),
+        &local_path,
         &source,
         &platform,
         user,
         &ingest_tags,
     )
     .await?;
+    if cleanup {
+        let _ = tokio::fs::remove_file(&local_path).await;
+    }
     if let Some(j) = job {
         let _ = state
             .ingest_jobs

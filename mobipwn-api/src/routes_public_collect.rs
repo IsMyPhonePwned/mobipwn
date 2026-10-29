@@ -194,6 +194,7 @@ async fn public_collect_ingest(
             logarchive_decode_max_lines: q.logarchive_decode_max_lines,
             max_entry_mb: q.max_entry_mb,
             ioservice_full_tree: q.ioservice_full_tree,
+            parser_threads: None,
         };
         (!o.is_empty()).then_some(o)
     } else {

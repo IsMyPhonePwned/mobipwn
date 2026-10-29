@@ -370,6 +370,229 @@ impl MobiPwnMcp {
             .map(|v| ok_json(&v))
             .map_err(|e| e.to_string())
     }
+
+    #[tool(description = "Data summary: ingested sources, event counts, parsers")]
+    async fn data_summary(&self) -> Result<String, String> {
+        self.api
+            .get("/v1/data/summary", &[])
+            .await
+            .map(|v| ok_json(&v))
+            .map_err(|e| e.to_string())
+    }
+
+    #[tool(
+        description = "Cold-archive an ingest source: clear ClickHouse events/alerts, keep blobs + case for re-ingest (requires data_admin)"
+    )]
+    async fn data_sources_archive(
+        &self,
+        Parameters(p): Parameters<SourceLabelParams>,
+    ) -> Result<String, String> {
+        self.api
+            .post("/v1/data/sources/archive", json!({ "source": p.source }))
+            .await
+            .map(|v| ok_json(&v))
+            .map_err(|e| e.to_string())
+    }
+
+    #[tool(
+        description = "Permanently delete an ingest source: events, cases, jobs, blobs (requires data_admin)"
+    )]
+    async fn data_sources_delete(
+        &self,
+        Parameters(p): Parameters<SourceLabelParams>,
+    ) -> Result<String, String> {
+        self.api
+            .post("/v1/data/sources/delete", json!({ "source": p.source }))
+            .await
+            .map(|v| ok_json(&v))
+            .map_err(|e| e.to_string())
+    }
+
+    #[tool(description = "List ingest jobs (optional source filter)")]
+    async fn ingest_jobs_list(
+        &self,
+        Parameters(p): Parameters<IngestJobsListParams>,
+    ) -> Result<String, String> {
+        self.api
+            .get(
+                "/v1/ingest/jobs",
+                &[("source", p.source), ("limit", p.limit.map(|n| n.to_string()))],
+            )
+            .await
+            .map(|v| ok_json(&v))
+            .map_err(|e| e.to_string())
+    }
+
+    #[tool(description = "Get one ingest job by id (progress, stage, errors)")]
+    async fn ingest_jobs_get(
+        &self,
+        Parameters(p): Parameters<IngestJobIdParams>,
+    ) -> Result<String, String> {
+        self.api
+            .get(&format!("/v1/ingest/jobs/{}", p.job_id), &[])
+            .await
+            .map(|v| ok_json(&v))
+            .map_err(|e| e.to_string())
+    }
+
+    #[tool(description = "Detailed health: ClickHouse, Postgres, ingest pool, MCP process")]
+    async fn health_detail(&self) -> Result<String, String> {
+        self.api
+            .get("/v1/health/detail", &[])
+            .await
+            .map(|v| ok_json(&v))
+            .map_err(|e| e.to_string())
+    }
+
+    #[tool(description = "Event count histogram over time for an mPL scope")]
+    async fn search_histogram(
+        &self,
+        Parameters(p): Parameters<HistogramParams>,
+    ) -> Result<String, String> {
+        let body = json!({
+            "query": p.query,
+            "time_from": p.time_from,
+            "time_to": p.time_to,
+            "span_minutes": p.span_minutes,
+        });
+        self.api
+            .post("/v1/search/histogram", body)
+            .await
+            .map(|v| ok_json(&v))
+            .map_err(|e| e.to_string())
+    }
+
+    #[tool(description = "Create an investigation case")]
+    async fn cases_create(
+        &self,
+        Parameters(p): Parameters<CasesCreateParams>,
+    ) -> Result<String, String> {
+        let body = json!({
+            "title": p.title,
+            "description": p.description,
+            "status": p.status,
+            "priority": p.priority,
+            "user": p.user,
+            "tags": p.tags,
+        });
+        self.api
+            .post("/v1/cases", body)
+            .await
+            .map(|v| ok_json(&v))
+            .map_err(|e| e.to_string())
+    }
+
+    #[tool(description = "Add a comment to a case wall")]
+    async fn cases_comment(
+        &self,
+        Parameters(p): Parameters<CasesCommentParams>,
+    ) -> Result<String, String> {
+        self.api
+            .post(
+                &format!("/v1/cases/{}/comments", p.case_id),
+                json!({ "body": p.body, "note_type": p.note_type }),
+            )
+            .await
+            .map(|v| ok_json(&v))
+            .map_err(|e| e.to_string())
+    }
+
+    #[tool(description = "Get one detection rule by id")]
+    async fn rules_get(
+        &self,
+        Parameters(p): Parameters<RuleIdParams>,
+    ) -> Result<String, String> {
+        self.api
+            .get(&format!("/v1/rules/{}", p.rule_id), &[])
+            .await
+            .map(|v| ok_json(&v))
+            .map_err(|e| e.to_string())
+    }
+
+    #[tool(description = "Run a detection rule now (scheduled-style evaluation)")]
+    async fn rules_run(
+        &self,
+        Parameters(p): Parameters<RuleIdParams>,
+    ) -> Result<String, String> {
+        self.api
+            .post(&format!("/v1/rules/{}/run", p.rule_id), json!({}))
+            .await
+            .map(|v| ok_json(&v))
+            .map_err(|e| e.to_string())
+    }
+
+    #[tool(description = "Update a detection rule (partial fields)")]
+    async fn rules_update(
+        &self,
+        Parameters(p): Parameters<RuleUpdateParams>,
+    ) -> Result<String, String> {
+        let body = json!({
+            "name": p.name,
+            "query": p.query,
+            "description": p.description,
+            "severity": p.severity,
+            "cron": p.cron,
+            "lifecycle": p.lifecycle,
+            "enabled": p.enabled,
+        });
+        self.api
+            .post(&format!("/v1/rules/{}", p.rule_id), body)
+            .await
+            .map(|v| ok_json(&v))
+            .map_err(|e| e.to_string())
+    }
+
+    #[tool(description = "List stored collect archive blobs (optional source filter)")]
+    async fn collect_blobs_list(
+        &self,
+        Parameters(p): Parameters<CollectBlobsListParams>,
+    ) -> Result<String, String> {
+        self.api
+            .get(
+                "/v1/collect/blobs",
+                &[
+                    ("source", p.source),
+                    ("limit", p.limit.map(|n| n.to_string())),
+                ],
+            )
+            .await
+            .map(|v| ok_json(&v))
+            .map_err(|e| e.to_string())
+    }
+
+    #[tool(
+        description = "Re-ingest a stored collect blob into ClickHouse (clean=true clears existing events for that source first)"
+    )]
+    async fn collect_blobs_reingest(
+        &self,
+        Parameters(p): Parameters<CollectBlobReingestParams>,
+    ) -> Result<String, String> {
+        let clean = p.clean.unwrap_or(true);
+        let path = format!(
+            "/v1/collect/blobs/{}/reingest?clean={}",
+            p.blob_id, clean
+        );
+        self.api
+            .post(&path, json!({}))
+            .await
+            .map(|v| ok_json(&v))
+            .map_err(|e| e.to_string())
+    }
+
+    #[tool(description = "Grouped alert summary (by rule / status)")]
+    async fn alerts_groups(
+        &self,
+        Parameters(p): Parameters<AlertsGroupsParams>,
+    ) -> Result<String, String> {
+        self.api
+            .get(
+                "/v1/alerts/groups",
+                &[("status", p.status), ("dismissed", p.dismissed)],
+            )
+            .await
+            .map(|v| ok_json(&v))
+            .map_err(|e| e.to_string())
+    }
 }
 
 #[tool_handler(
@@ -648,4 +871,85 @@ struct PrevalenceScatterParams {
     time_to: Option<String>,
     max_device_count: Option<u32>,
     rarity_threshold: Option<f64>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct SourceLabelParams {
+    #[schemars(description = "Ingest source label, e.g. case-001")]
+    source: String,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct IngestJobsListParams {
+    source: Option<String>,
+    limit: Option<u32>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct IngestJobIdParams {
+    job_id: String,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct HistogramParams {
+    query: String,
+    time_from: Option<String>,
+    time_to: Option<String>,
+    #[schemars(description = "Bucket width in minutes")]
+    span_minutes: Option<u32>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct CasesCreateParams {
+    title: String,
+    description: Option<String>,
+    status: Option<String>,
+    priority: Option<String>,
+    #[schemars(description = "Device owner")]
+    user: Option<String>,
+    tags: Option<Vec<String>>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct CasesCommentParams {
+    case_id: String,
+    body: String,
+    #[schemars(description = "comment | note | finding")]
+    note_type: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct RuleIdParams {
+    rule_id: String,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct RuleUpdateParams {
+    rule_id: String,
+    name: Option<String>,
+    query: Option<String>,
+    description: Option<String>,
+    severity: Option<String>,
+    cron: Option<String>,
+    lifecycle: Option<String>,
+    enabled: Option<bool>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct CollectBlobsListParams {
+    source: Option<String>,
+    limit: Option<u32>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct CollectBlobReingestParams {
+    blob_id: String,
+    #[schemars(description = "Clear existing ClickHouse events for the blob source first (default true)")]
+    clean: Option<bool>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct AlertsGroupsParams {
+    status: Option<String>,
+    dismissed: Option<String>,
 }

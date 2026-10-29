@@ -18,7 +18,10 @@ mod sysdiagnose_flatten;
 #[cfg(not(target_arch = "wasm32"))]
 mod sysdiagnose_report;
 
-pub use clickhouse_insert::{insert_events, insert_events_with_progress};
+pub use clickhouse_insert::{
+    insert_events, insert_events_chunked, insert_events_draining, insert_events_with_progress,
+    insert_jsonl_file_chunked, DEFAULT_INSERT_CHUNK_SIZE,
+};
 pub use endpoint_zip::{
     device_id_from_path, ingest_endpoint_zip_jsonl, parse_endpoint_zip, EndpointZipFile,
     EndpointZipParseResult,

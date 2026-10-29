@@ -13,6 +13,88 @@ pub const KEY_ENTITY_LIMITS: &str = "entity_limits";
 pub const KEY_RETENTION: &str = "retention_by_source_type";
 pub const KEY_MCP: &str = "mcp_config";
 pub const KEY_PUBLIC_COLLECT: &str = "public_collect_config";
+pub const KEY_INGEST_POOL: &str = "ingest_pool_config";
+
+/// Concurrent archive parse/insert workers (admin-tunable; applied live by the API pool).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IngestPoolConfig {
+    /// Concurrent parse/insert slots (1–16).
+    #[serde(default = "default_ingest_workers")]
+    pub workers: u32,
+    /// Max pending jobs waiting for a worker (`0` = unlimited). Rejects new completes with HTTP 429 when full.
+    #[serde(default = "default_ingest_max_queue")]
+    pub max_queue: u32,
+    /// ClickHouse insert chunk size (rows). Lower = less peak RAM after parse; higher = fewer inserts.
+    #[serde(default = "default_insert_chunk_size")]
+    pub insert_chunk_size: u32,
+}
+
+fn default_ingest_workers() -> u32 {
+    2
+}
+
+fn default_ingest_max_queue() -> u32 {
+    32
+}
+
+fn default_insert_chunk_size() -> u32 {
+    25_000
+}
+
+impl Default for IngestPoolConfig {
+    fn default() -> Self {
+        Self {
+            workers: default_ingest_workers(),
+            max_queue: default_ingest_max_queue(),
+            insert_chunk_size: default_insert_chunk_size(),
+        }
+    }
+}
+
+impl IngestPoolConfig {
+    pub fn from_env_config(config: &AppConfig) -> Self {
+        Self {
+            workers: config.ingest_workers.clamp(1, 16) as u32,
+            max_queue: config.ingest_max_queue,
+            insert_chunk_size: config.ingest_insert_chunk_size.clamp(1_000, 500_000) as u32,
+        }
+    }
+
+    pub fn normalized(self) -> Self {
+        Self {
+            workers: self.workers.clamp(1, 16),
+            max_queue: self.max_queue.min(10_000),
+            insert_chunk_size: self.insert_chunk_size.clamp(1_000, 500_000),
+        }
+    }
+
+    pub fn effective_insert_chunk_size(&self) -> usize {
+        self.insert_chunk_size.clamp(1_000, 500_000) as usize
+    }
+}
+
+pub async fn load_ingest_pool_config(
+    settings: &SettingsRepository,
+    env: &AppConfig,
+) -> anyhow::Result<IngestPoolConfig> {
+    let raw = settings.get(KEY_INGEST_POOL).await?;
+    if raw.is_null() || raw.as_object().is_none_or(|o| o.is_empty()) {
+        return Ok(IngestPoolConfig::from_env_config(env));
+    }
+    let cfg: IngestPoolConfig = serde_json::from_value(raw).unwrap_or_default();
+    Ok(cfg.normalized())
+}
+
+pub async fn save_ingest_pool_config(
+    settings: &SettingsRepository,
+    incoming: &IngestPoolConfig,
+) -> anyhow::Result<IngestPoolConfig> {
+    let next = incoming.clone().normalized();
+    settings
+        .set(KEY_INGEST_POOL, &serde_json::to_value(&next)?)
+        .await?;
+    Ok(next)
+}
 
 const MASKED_SECRET: &str = "********";
 
@@ -874,6 +956,16 @@ pub async fn bootstrap_from_env(
             .await?;
     }
 
+    let ingest_pool = settings.get(KEY_INGEST_POOL).await?;
+    if ingest_pool.as_object().is_none_or(|o| o.is_empty() || !o.contains_key("workers")) {
+        settings
+            .set(
+                KEY_INGEST_POOL,
+                &serde_json::to_value(IngestPoolConfig::from_env_config(config))?,
+            )
+            .await?;
+    }
+
     Ok(())
 }
 
@@ -895,6 +987,14 @@ pub const MAX_ENTRY_MB_CEILING: u32 = 1_024;
 /// Forensic unified-log decode ceiling (mirrors library `LOGARCHIVE_FORENSIC_MAX_LINES`).
 pub const LOGARCHIVE_FORENSIC_MAX_LINES: u32 = 250_000;
 
+fn default_sysdiagnose_parser_threads() -> u32 {
+    std::env::var("MOBIPWN_SYSDIAGNOSE_PARSER_THREADS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(2)
+        .clamp(1, 8)
+}
+
 /// iOS sysdiagnose ingest tuning (Settings → General → iOS sysdiagnose ingest).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SysdiagnoseIngestConfig {
@@ -911,6 +1011,9 @@ pub struct SysdiagnoseIngestConfig {
     /// Max uncompressed tar member size in MiB (default 64). `0` is treated as the ceiling.
     #[serde(default = "default_max_entry_mb")]
     pub max_entry_mb: u32,
+    /// Rayon concurrency for sysdiagnose parsers within one job (1–8).
+    #[serde(default = "default_sysdiagnose_parser_threads")]
+    pub parser_threads: u32,
 }
 
 impl Default for SysdiagnoseIngestConfig {
@@ -920,6 +1023,7 @@ impl Default for SysdiagnoseIngestConfig {
             ioservice_full_tree: false,
             logarchive_uncapped: false,
             max_entry_mb: default_max_entry_mb(),
+            parser_threads: default_sysdiagnose_parser_threads(),
         }
     }
 }
@@ -944,6 +1048,10 @@ impl SysdiagnoseIngestConfig {
             (self.logarchive_decode_max_lines as usize).min(LOGARCHIVE_FORENSIC_MAX_LINES as usize)
         }
     }
+
+    pub fn effective_parser_threads(&self) -> usize {
+        self.parser_threads.clamp(1, 8) as usize
+    }
 }
 
 pub fn prepare_sysdiagnose_ingest_config(cfg: &mut SysdiagnoseIngestConfig) {
@@ -955,6 +1063,7 @@ pub fn prepare_sysdiagnose_ingest_config(cfg: &mut SysdiagnoseIngestConfig) {
         };
     }
     cfg.max_entry_mb = cfg.max_entry_mb.min(MAX_ENTRY_MB_CEILING);
+    cfg.parser_threads = cfg.parser_threads.clamp(1, 8);
 
     if cfg.logarchive_uncapped {
         cfg.logarchive_decode_max_lines = LOGARCHIVE_FORENSIC_MAX_LINES;
@@ -983,6 +1092,8 @@ pub struct SysdiagnoseIngestOverrides {
     pub max_entry_mb: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ioservice_full_tree: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parser_threads: Option<u32>,
 }
 
 impl SysdiagnoseIngestOverrides {
@@ -991,6 +1102,7 @@ impl SysdiagnoseIngestOverrides {
             && self.logarchive_decode_max_lines.is_none()
             && self.max_entry_mb.is_none()
             && self.ioservice_full_tree.is_none()
+            && self.parser_threads.is_none()
     }
 }
 
@@ -1011,6 +1123,9 @@ pub fn apply_sysdiagnose_ingest_overrides(
         }
         if let Some(v) = o.ioservice_full_tree {
             cfg.ioservice_full_tree = v;
+        }
+        if let Some(v) = o.parser_threads {
+            cfg.parser_threads = v;
         }
     }
     prepare_sysdiagnose_ingest_config(&mut cfg);
@@ -1234,4 +1349,77 @@ pub async fn save_install_enrichment_config(
         .set(KEY_INSTALL_ENRICHMENT, &serde_json::to_value(next)?)
         .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod ingest_scalability_tests {
+    use super::*;
+
+    #[test]
+    fn ingest_pool_config_normalized_clamps() {
+        let cfg = IngestPoolConfig {
+            workers: 0,
+            max_queue: 50_000,
+            insert_chunk_size: 10,
+        }
+        .normalized();
+        assert_eq!(cfg.workers, 1);
+        assert_eq!(cfg.max_queue, 10_000);
+        assert_eq!(cfg.insert_chunk_size, 1_000);
+        assert_eq!(cfg.effective_insert_chunk_size(), 1_000);
+
+        let hi = IngestPoolConfig {
+            workers: 99,
+            max_queue: 4,
+            insert_chunk_size: 999_999,
+        }
+        .normalized();
+        assert_eq!(hi.workers, 16);
+        assert_eq!(hi.max_queue, 4);
+        assert_eq!(hi.insert_chunk_size, 500_000);
+    }
+
+    #[test]
+    fn ingest_pool_config_serde_defaults() {
+        let cfg: IngestPoolConfig = serde_json::from_value(serde_json::json!({"workers": 3})).unwrap();
+        assert_eq!(cfg.workers, 3);
+        assert_eq!(cfg.max_queue, default_ingest_max_queue());
+        assert_eq!(cfg.insert_chunk_size, default_insert_chunk_size());
+    }
+
+    #[test]
+    fn sysdiagnose_parser_threads_clamped() {
+        let mut cfg = SysdiagnoseIngestConfig {
+            parser_threads: 0,
+            ..Default::default()
+        };
+        prepare_sysdiagnose_ingest_config(&mut cfg);
+        assert_eq!(cfg.effective_parser_threads(), 1);
+
+        cfg.parser_threads = 99;
+        prepare_sysdiagnose_ingest_config(&mut cfg);
+        assert_eq!(cfg.effective_parser_threads(), 8);
+    }
+
+    #[test]
+    fn sysdiagnose_overrides_apply_parser_threads() {
+        let base = SysdiagnoseIngestConfig::default();
+        let over = SysdiagnoseIngestOverrides {
+            parser_threads: Some(6),
+            ..Default::default()
+        };
+        let merged = apply_sysdiagnose_ingest_overrides(base, Some(&over));
+        assert_eq!(merged.effective_parser_threads(), 6);
+    }
+
+    #[test]
+    fn sysdiagnose_overrides_empty_without_parser_threads() {
+        let empty = SysdiagnoseIngestOverrides::default();
+        assert!(empty.is_empty());
+        let with = SysdiagnoseIngestOverrides {
+            parser_threads: Some(2),
+            ..Default::default()
+        };
+        assert!(!with.is_empty());
+    }
 }

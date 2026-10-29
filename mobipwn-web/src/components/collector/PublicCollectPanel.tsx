@@ -195,6 +195,10 @@ export function PublicCollectPanel({ embedded = false, onOpenSettings, onOpenYar
               typeof cfg.sysdiagnose.max_entry_mb === "number"
                 ? cfg.sysdiagnose.max_entry_mb
                 : DEFAULT_SYSDIAGNOSE_INGEST_CONFIG.max_entry_mb,
+            parser_threads:
+              typeof (cfg.sysdiagnose as { parser_threads?: number }).parser_threads === "number"
+                ? (cfg.sysdiagnose as { parser_threads?: number }).parser_threads!
+                : DEFAULT_SYSDIAGNOSE_INGEST_CONFIG.parser_threads,
           });
         }
       })

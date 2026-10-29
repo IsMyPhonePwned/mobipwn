@@ -36,6 +36,43 @@ pub struct SourceSummary {
     /// Ingest-time options (build features, logarchive decode, etc.).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ingest_options: Option<IngestJobOptions>,
+    /// Stored archive blob count for this source.
+    #[serde(default)]
+    pub blob_count: u64,
+    /// Sum of stored archive file sizes (bytes).
+    #[serde(default)]
+    pub blob_bytes: u64,
+    /// Estimated ClickHouse on-disk share for this source's events (proportional).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub estimated_events_bytes: Option<u64>,
+    /// True when source has no ClickHouse events but still has cold blobs.
+    #[serde(default)]
+    pub cold_archived: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PlatformBreakdown {
+    pub platform: String,
+    pub source_count: u64,
+    pub event_count: u64,
+    pub blob_bytes: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DataStorageSummary {
+    pub clickhouse_status: String,
+    pub clickhouse_bytes: u64,
+    pub clickhouse_rows: u64,
+    pub events_bytes: u64,
+    pub events_rows: u64,
+    pub detection_signals_bytes: u64,
+    pub detection_signals_rows: u64,
+    pub postgres_status: String,
+    pub postgres_bytes: u64,
+    pub blob_count: u64,
+    pub blob_bytes: u64,
+    pub blob_analyzed_count: u64,
+    pub blob_cold_count: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -45,6 +82,16 @@ pub struct DataSummary {
     /// Cargo features enabled in the running API / ingest binary.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub build_features: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub storage: Option<DataStorageSummary>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub platforms: Vec<PlatformBreakdown>,
+    /// Sources with ClickHouse events.
+    #[serde(default)]
+    pub hot_source_count: u64,
+    /// Sources with blobs but no ClickHouse events (cold-archived).
+    #[serde(default)]
+    pub cold_source_count: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -64,6 +111,16 @@ pub struct ClearIngestEventsResponse {
     pub source: String,
     pub events_deleted: u64,
     pub detection_signals_deleted: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ArchiveIngestResponse {
+    pub source: String,
+    pub events_deleted: u64,
+    pub detection_signals_deleted: u64,
+    pub blobs_retained: u64,
+    pub cases_tagged: u64,
+    pub alerts_removed: u64,
 }
 
 /// Remove ClickHouse events (and related detection signals) for a source without deleting
@@ -99,9 +156,69 @@ pub async fn clear_ingest_events_for_source(
     })
 }
 
+/// Cold-archive an ingest: purge ClickHouse events/signals (and alerts), keep collect blobs +
+/// case/ingest-job metadata so the archive can be re-ingested later.
+pub async fn archive_ingest_source(
+    pool: &Arc<DualPool>,
+    config: &AppConfig,
+    cases: &CaseRepository,
+    collect_blobs: &CollectBlobRepository,
+    alerts: &AlertRepository,
+    source: &str,
+) -> anyhow::Result<ArchiveIngestResponse> {
+    if pool.health().await == PoolHealth::PostgresOnly {
+        anyhow::bail!("ClickHouse unavailable — start Docker / ./dev.sh");
+    }
+
+    let source = source.trim();
+    if source.is_empty() {
+        anyhow::bail!("source label is required");
+    }
+    if source.len() > 500 {
+        anyhow::bail!("source label too long (max 500 characters)");
+    }
+
+    let _ = run_migrations(&pool.postgres).await;
+
+    let cleared = clear_ingest_events_for_source(config, source).await?;
+    let blobs_retained = collect_blobs.count_for_source(source).await?.max(0) as u64;
+    let _ = collect_blobs.set_analyzed_for_source(source, false).await?;
+
+    let case_ids = cases.find_ids_for_ingest_source(source).await?;
+    let alerts_removed = alerts
+        .delete_for_ingest_source(source, &case_ids)
+        .await
+        .unwrap_or(0);
+
+    let cases_tagged = cases
+        .patch_tags_for_ingest_source(source, &["archived".into()], &["ingested".into()])
+        .await
+        .unwrap_or(0);
+
+    tracing::info!(
+        %source,
+        events_deleted = cleared.events_deleted,
+        detection_signals_deleted = cleared.detection_signals_deleted,
+        blobs_retained,
+        cases_tagged,
+        alerts_removed,
+        "archived ingest source (events cleared, blobs retained)"
+    );
+
+    Ok(ArchiveIngestResponse {
+        source: source.to_string(),
+        events_deleted: cleared.events_deleted,
+        detection_signals_deleted: cleared.detection_signals_deleted,
+        blobs_retained,
+        cases_tagged,
+        alerts_removed,
+    })
+}
+
 pub async fn fetch_data_summary(
     pool: &Arc<DualPool>,
     config: &AppConfig,
+    collect_blobs: Option<&CollectBlobRepository>,
     build_features: &[&str],
 ) -> anyhow::Result<DataSummary> {
     if pool.health().await == PoolHealth::PostgresOnly {
@@ -134,7 +251,7 @@ pub async fn fetch_data_summary(
              FROM {db}.events \
              GROUP BY source, platform, source_type \
              ORDER BY last_ingest DESC \
-             LIMIT 200"
+             LIMIT 500"
         ),
     )
     .await?;
@@ -152,7 +269,26 @@ pub async fn fetch_data_summary(
         .await
         .unwrap_or_default();
 
-    let sources = source_rows
+    let blob_agg = if let Some(blobs) = collect_blobs {
+        blobs.storage_stats_by_source().await.unwrap_or_default()
+    } else {
+        crate::store::BlobStorageAggregate::default()
+    };
+    let db_storage = crate::health::db_stats::fetch_database_storage(pool, config).await;
+    let events_table = db_storage
+        .clickhouse
+        .tables
+        .iter()
+        .find(|t| t.name == "events");
+    let signals_table = db_storage
+        .clickhouse
+        .tables
+        .iter()
+        .find(|t| t.name == "detection_signals");
+    let events_bytes = events_table.map(|t| t.bytes).unwrap_or(0);
+    let events_rows = events_table.map(|t| t.rows).unwrap_or(total_events);
+
+    let mut sources = source_rows
         .into_iter()
         .filter_map(|r| {
             let source = json_str(r.get("source"))?;
@@ -165,13 +301,24 @@ pub async fn fetch_data_summary(
                 .or_else(|| ingest_hints.get(&source).cloned())
                 .filter(|o| !ingest_options_empty(o));
 
+            let event_count = r.get("event_count").map(|v| json_u64(v)).unwrap_or(0);
+            let blob = blob_agg.by_source.get(&source);
+            let estimated_events_bytes = if total_events > 0 && events_bytes > 0 && event_count > 0 {
+                Some(((event_count as u128 * events_bytes as u128) / total_events as u128) as u64)
+            } else {
+                None
+            };
+
+            let source_type = json_str(r.get("source_type")).unwrap_or_default();
+            // Case audit timeline rows live in events with source_type=audit — not ingest sources.
+            if source_type == "audit" || source == "case" {
+                return None;
+            }
+
             Some(SourceSummary {
                 platform: json_str(r.get("platform")).unwrap_or_default(),
-                source_type: json_str(r.get("source_type")).unwrap_or_default(),
-                event_count: r
-                    .get("event_count")
-                    .map(|v| json_u64(v))
-                    .unwrap_or(0),
+                source_type,
+                event_count,
                 first_seen: json_time(r.get("first_seen")),
                 last_seen: json_time(r.get("last_seen")),
                 first_ingest: json_time(r.get("first_ingest")),
@@ -179,6 +326,10 @@ pub async fn fetch_data_summary(
                 case_user: case_users.get(&source).cloned(),
                 parsers,
                 ingest_options,
+                blob_count: blob.map(|b| b.blob_count).unwrap_or(0),
+                blob_bytes: blob.map(|b| b.blob_bytes).unwrap_or(0),
+                estimated_events_bytes,
+                cold_archived: false,
                 source,
             })
         })
@@ -187,16 +338,110 @@ pub async fn fetch_data_summary(
     let tombstoned = fetch_tombstoned_sources(&pool.postgres)
         .await
         .unwrap_or_default();
-    let sources: Vec<SourceSummary> = sources
-        .into_iter()
-        .filter(|s| !tombstoned.contains(&s.source))
-        .collect();
+    sources.retain(|s| !tombstoned.contains(&s.source));
+
+    let hot_labels: HashSet<String> = sources.iter().map(|s| s.source.clone()).collect();
+    let mut cold_source_count = 0u64;
+    for (source, blob) in &blob_agg.by_source {
+        if hot_labels.contains(source) || tombstoned.contains(source) {
+            continue;
+        }
+        if blob.blob_count == 0 {
+            continue;
+        }
+        cold_source_count += 1;
+        let platform = fetch_blob_platform_hint(&pool.postgres, source)
+            .await
+            .unwrap_or_else(|| "unknown".into());
+        sources.push(SourceSummary {
+            source: source.clone(),
+            platform: platform.clone(),
+            source_type: String::new(),
+            event_count: 0,
+            first_seen: None,
+            last_seen: None,
+            first_ingest: None,
+            last_ingest: None,
+            case_user: case_users.get(source).cloned(),
+            parsers: Vec::new(),
+            ingest_options: None,
+            blob_count: blob.blob_count,
+            blob_bytes: blob.blob_bytes,
+            estimated_events_bytes: None,
+            cold_archived: true,
+        });
+    }
+
+    sources.sort_by(|a, b| {
+        b.event_count
+            .cmp(&a.event_count)
+            .then_with(|| b.blob_bytes.cmp(&a.blob_bytes))
+            .then_with(|| a.source.cmp(&b.source))
+    });
+
+    let hot_source_count = sources.iter().filter(|s| s.event_count > 0).count() as u64;
+    let platforms = build_platform_breakdown(&sources);
+
+    let storage = DataStorageSummary {
+        clickhouse_status: db_storage.clickhouse.status.to_string(),
+        clickhouse_bytes: db_storage.clickhouse.database_bytes,
+        clickhouse_rows: db_storage.clickhouse.total_rows,
+        events_bytes,
+        events_rows,
+        detection_signals_bytes: signals_table.map(|t| t.bytes).unwrap_or(0),
+        detection_signals_rows: signals_table.map(|t| t.rows).unwrap_or(0),
+        postgres_status: db_storage.postgres.status.to_string(),
+        postgres_bytes: db_storage.postgres.database_bytes,
+        blob_count: blob_agg.blob_count,
+        blob_bytes: blob_agg.total_bytes,
+        blob_analyzed_count: blob_agg.analyzed_count,
+        blob_cold_count: blob_agg.cold_count,
+    };
 
     Ok(DataSummary {
         total_events,
         sources,
         build_features: build_features.iter().map(|s| (*s).to_string()).collect(),
+        storage: Some(storage),
+        platforms,
+        hot_source_count,
+        cold_source_count,
     })
+}
+
+fn build_platform_breakdown(sources: &[SourceSummary]) -> Vec<PlatformBreakdown> {
+    let mut map: HashMap<String, PlatformBreakdown> = HashMap::new();
+    for s in sources {
+        let key = if s.platform.is_empty() {
+            "unknown".into()
+        } else {
+            s.platform.clone()
+        };
+        let entry = map.entry(key.clone()).or_insert(PlatformBreakdown {
+            platform: key,
+            source_count: 0,
+            event_count: 0,
+            blob_bytes: 0,
+        });
+        entry.source_count += 1;
+        entry.event_count += s.event_count;
+        entry.blob_bytes += s.blob_bytes;
+    }
+    let mut out: Vec<_> = map.into_values().collect();
+    out.sort_by(|a, b| b.event_count.cmp(&a.event_count).then_with(|| a.platform.cmp(&b.platform)));
+    out
+}
+
+async fn fetch_blob_platform_hint(pool: &sqlx::PgPool, source: &str) -> Option<String> {
+    let row: Option<(String,)> = sqlx::query_as(
+        "SELECT platform FROM collect_blobs WHERE source = $1 ORDER BY created_at DESC LIMIT 1",
+    )
+    .bind(source)
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten();
+    row.map(|(p,)| p).filter(|p| !p.is_empty())
 }
 
 /// Map ingest source labels to device owner (`cases.case_user`, else latest `ingest_jobs.case_user`).
@@ -259,7 +504,7 @@ pub async fn delete_ingest_source(
         delete_clickhouse_detection_signals_for_source(config, source).await?;
     let audit_events_deleted =
         delete_clickhouse_case_audit_events(config, &case_ids).await?;
-    let collect_blobs_removed = collect_blobs.delete_by_source(source).await?;
+    let collect_blobs_removed = collect_blobs.delete_by_source(config, source).await?;
     let alerts_removed = alerts.delete_for_ingest_source(source, &case_ids).await?;
     let events_deleted = delete_clickhouse_events_by_source(config, source).await?;
     wait_clickhouse_source_empty(config, source, Duration::from_secs(20)).await;

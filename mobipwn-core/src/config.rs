@@ -69,6 +69,68 @@ pub struct AppConfig {
     pub search_admission: SearchAdmissionConfig,
     pub require_auth: bool,
     pub expose_dev_logs: bool,
+    /// Max concurrent archive parse/insert workers in `mobipwn-api` (default 2).
+    pub ingest_workers: usize,
+    /// Max pending ingest jobs before HTTP 429 (`0` = unlimited). Env `MOBIPWN_INGEST_MAX_QUEUE`.
+    pub ingest_max_queue: u32,
+    /// Rows per ClickHouse insert chunk. Env `MOBIPWN_INGEST_INSERT_CHUNK`.
+    pub ingest_insert_chunk_size: usize,
+    /// `both` (default), `api-only` (queue only), or `worker` (process pool, health-only HTTP).
+    pub ingest_mode: IngestMode,
+    /// Durable upload/temp directory (shared across API + ingest worker). Env `MOBIPWN_UPLOAD_DIR`.
+    pub upload_dir: String,
+    /// Archive blob backend: `local` (default) or `s3`.
+    pub archive_backend: ArchiveBackend,
+    pub s3_bucket: Option<String>,
+    pub s3_prefix: String,
+    pub s3_region: String,
+    pub s3_endpoint: Option<String>,
+    pub s3_access_key: Option<String>,
+    pub s3_secret_key: Option<String>,
+}
+
+/// How this process participates in archive ingest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IngestMode {
+    /// Accept uploads and run the worker pool (single-node default).
+    Both,
+    /// Accept uploads / enqueue only — another process must run workers.
+    ApiOnly,
+    /// Run workers only (optional health listener on `api_bind`).
+    Worker,
+}
+
+impl IngestMode {
+    pub fn from_env_str(s: &str) -> Self {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "api-only" | "api_only" | "api" => Self::ApiOnly,
+            "worker" | "workers" | "ingest-worker" => Self::Worker,
+            _ => Self::Both,
+        }
+    }
+
+    pub fn runs_workers(self) -> bool {
+        matches!(self, Self::Both | Self::Worker)
+    }
+
+    pub fn serves_api(self) -> bool {
+        matches!(self, Self::Both | Self::ApiOnly)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArchiveBackend {
+    Local,
+    S3,
+}
+
+impl ArchiveBackend {
+    pub fn from_env_str(s: &str) -> Self {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "s3" | "minio" | "object" => Self::S3,
+            _ => Self::Local,
+        }
+    }
 }
 
 impl AppConfig {
@@ -104,6 +166,46 @@ impl AppConfig {
             expose_dev_logs: std::env::var("MOBIPWN_EXPOSE_DEV_LOGS")
                 .map(|v| v != "0" && v != "false")
                 .unwrap_or(true),
+            ingest_workers: std::env::var("MOBIPWN_INGEST_WORKERS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(2)
+                .max(1),
+            ingest_max_queue: std::env::var("MOBIPWN_INGEST_MAX_QUEUE")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(32),
+            ingest_insert_chunk_size: std::env::var("MOBIPWN_INGEST_INSERT_CHUNK")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(25_000)
+                .clamp(1_000, 500_000),
+            ingest_mode: IngestMode::from_env_str(
+                &std::env::var("MOBIPWN_INGEST_MODE").unwrap_or_else(|_| "both".into()),
+            ),
+            upload_dir: std::env::var("MOBIPWN_UPLOAD_DIR").unwrap_or_else(|_| {
+                std::env::temp_dir()
+                    .join("mobipwn_uploads")
+                    .to_string_lossy()
+                    .into_owned()
+            }),
+            archive_backend: ArchiveBackend::from_env_str(
+                &std::env::var("MOBIPWN_ARCHIVE_BACKEND").unwrap_or_else(|_| "local".into()),
+            ),
+            s3_bucket: std::env::var("MOBIPWN_S3_BUCKET").ok().filter(|s| !s.is_empty()),
+            s3_prefix: std::env::var("MOBIPWN_S3_PREFIX").unwrap_or_else(|_| "collect-blobs".into()),
+            s3_region: std::env::var("MOBIPWN_S3_REGION").unwrap_or_else(|_| "us-east-1".into()),
+            s3_endpoint: std::env::var("MOBIPWN_S3_ENDPOINT")
+                .ok()
+                .filter(|s| !s.is_empty()),
+            s3_access_key: std::env::var("MOBIPWN_S3_ACCESS_KEY")
+                .or_else(|_| std::env::var("AWS_ACCESS_KEY_ID"))
+                .ok()
+                .filter(|s| !s.is_empty()),
+            s3_secret_key: std::env::var("MOBIPWN_S3_SECRET_KEY")
+                .or_else(|_| std::env::var("AWS_SECRET_ACCESS_KEY"))
+                .ok()
+                .filter(|s| !s.is_empty()),
             search_admission: SearchAdmissionConfig {
                 max_limit: std::env::var("MOBIPWN_SEARCH_MAX_LIMIT")
                     .ok()
@@ -152,5 +254,39 @@ impl AppConfig {
             client = client.with_password(password.clone());
         }
         client
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ingest_mode_from_env_str() {
+        assert_eq!(IngestMode::from_env_str("both"), IngestMode::Both);
+        assert_eq!(IngestMode::from_env_str("API-ONLY"), IngestMode::ApiOnly);
+        assert_eq!(IngestMode::from_env_str("api_only"), IngestMode::ApiOnly);
+        assert_eq!(IngestMode::from_env_str("worker"), IngestMode::Worker);
+        assert_eq!(IngestMode::from_env_str("ingest-worker"), IngestMode::Worker);
+        assert_eq!(IngestMode::from_env_str("nope"), IngestMode::Both);
+    }
+
+    #[test]
+    fn ingest_mode_roles() {
+        assert!(IngestMode::Both.runs_workers());
+        assert!(IngestMode::Both.serves_api());
+        assert!(!IngestMode::ApiOnly.runs_workers());
+        assert!(IngestMode::ApiOnly.serves_api());
+        assert!(IngestMode::Worker.runs_workers());
+        assert!(!IngestMode::Worker.serves_api());
+    }
+
+    #[test]
+    fn archive_backend_from_env_str() {
+        assert_eq!(ArchiveBackend::from_env_str("local"), ArchiveBackend::Local);
+        assert_eq!(ArchiveBackend::from_env_str("S3"), ArchiveBackend::S3);
+        assert_eq!(ArchiveBackend::from_env_str("minio"), ArchiveBackend::S3);
+        assert_eq!(ArchiveBackend::from_env_str("object"), ArchiveBackend::S3);
+        assert_eq!(ArchiveBackend::from_env_str(""), ArchiveBackend::Local);
     }
 }

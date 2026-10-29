@@ -34,7 +34,7 @@ pub async fn list_cases_with_ingest(
         return Ok(cases);
     }
 
-    let summary = match fetch_data_summary(pool, config, &[]).await {
+    let summary = match fetch_data_summary(pool, config, None, &[]).await {
         Ok(s) => s,
         Err(_) => return Ok(cases),
     };
@@ -43,6 +43,9 @@ pub async fn list_cases_with_ingest(
     let filter_by_query = !query.is_empty();
 
     for src in &summary.sources {
+        if src.cold_archived || src.event_count == 0 {
+            continue;
+        }
         if !is_registerable_ingest_source(src) {
             continue;
         }

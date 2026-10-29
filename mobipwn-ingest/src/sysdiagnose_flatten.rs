@@ -2798,7 +2798,7 @@ mod tests {
     fn flattens_network_iocs_hits() {
         let parsed = HashMap::from([(
             "powerlogs".to_string(),
-            json!({
+            std::sync::Arc::new(json!({
                 "parser": "powerlogs",
                 "events": [{
                     "data": {
@@ -2806,7 +2806,7 @@ mod tests {
                         "serverhostname": "push.apple.com"
                     }
                 }]
-            }),
+            })),
         )]);
         let arch = SysdiagnoseArchive::from_files_for_test(HashMap::new());
         let mut lines = Vec::new();

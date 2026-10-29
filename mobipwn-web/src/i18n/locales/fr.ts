@@ -466,8 +466,13 @@ export const fr: Messages = {
     blobStorageColSource: "Source",
     blobStorageColOrigin: "Origine",
     blobStorageColAnalyzed: "Analysé",
-    blobStorageAnalyzedYes: "Oui",
-    blobStorageAnalyzedNo: "En attente",
+    blobStorageAnalyzedYes: "Dans ClickHouse",
+    blobStorageAnalyzedNo: "Archivé (blob seul)",
+    archiveIngest: "Archiver",
+    archiveIngestTitle: "Archiver l'ingest (conserver le blob)",
+    archiveIngestConfirm:
+      "Supprimer tous les événements ClickHouse pour cette source tout en conservant l'archive et le dossier ?\n\nVous pourrez ré-ingérer plus tard depuis le stockage blob ou la page du dossier.",
+    archiveIngestDone: "{{source}} archivé — {{events}} événements effacés, {{blobs}} blob(s) conservé(s)",
     blobStorageColPlatform: "Plateforme",
     blobStorageColSize: "Taille",
     blobStorageColCase: "Dossier",
@@ -530,6 +535,9 @@ export const fr: Messages = {
     ioserviceFullTreeLabel: "Arbre IOService complet",
     ioserviceFullTreeHint:
       "Si activé, développe l'arbre IOService complet au lieu de l'aperçu compact (sortie beaucoup plus volumineuse).",
+    parserThreadsLabel: "Threads d'analyse (1–8)",
+    parserThreadsHint:
+      "Concurrence Rayon des analyseurs sysdiagnose dans un job. Baisser pour limiter la RAM ; monter seulement s'il reste du CPU.",
   },
   installEnrichment: {
     title: "Règles d'enrichissement d'installation",
@@ -817,6 +825,10 @@ export const fr: Messages = {
     ingestedEvents: "{{count}} événements ingérés",
     linkCase: "Dossier",
     progressTitle: "Progression de l'ingestion",
+    elapsed: "Écoulé",
+    queueBadge: "En file",
+    queuedHint:
+      "En attente d’un worker d’ingestion libre. D’autres archives peuvent être en cours — le traitement démarrera automatiquement.",
     readingFile: "Lecture du fichier…",
     sendingToApi: "Envoi à l'API…",
     stepHash: "Vérifier le fichier (SHA-256)",
@@ -915,6 +927,14 @@ export const fr: Messages = {
       "Pas de backtrace ni de threads ANR imbriqués sur cet événement. Ré-ingérez après le dernier parseur Crash bugreport pour les stacks complets.",
     searchReingestedBadge: "Ré-ingéré",
     searchReingestedHint: "Ré-ingéré {{count}} fois · dernier {{when}}",
+    searchArchivedBadge: "Archivé",
+    searchArchivedHint:
+      "Archive froide — événements ClickHouse effacés ; blob conservé pour ré-ingestion",
+    searchArchivedNoEvents: "0 événement (archivé)",
+    detailArchivedTitle: "Ingest archivé (froid)",
+    detailArchivedBody:
+      "Les événements ClickHouse de cette source ont été effacés. Le blob d'archive est conservé — ré-ingérez pour restaurer les données consultables.",
+    detailArchivedReingestCta: "Ré-ingérer pour restaurer",
     searchLastIngest: "Dernière ingestion {{when}}",
     searchLastReingest: "Dernière ré-ingestion {{when}}",
     searchIngestRuns: "{{count}} ingestions",

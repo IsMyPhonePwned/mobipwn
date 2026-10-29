@@ -19,11 +19,12 @@ use mobipwn_core::marketplace::EnrichmentProvider;
 use mobipwn_core::health::fetch_health_detail;
 use mobipwn_core::marketplace::coverage_percent;
 use mobipwn_core::{
-    compile_yara_source, encode_yarc, load_entity_limits_config, load_install_enrichment_config,
-    redact_llm_value, redact_mcp_value, save_entity_limits_config, save_install_enrichment_config,
-    save_llm_config, save_public_collect_config, save_sysdiagnose_ingest_config, EntityLimitsConfig,
+    compile_yara_source, encode_yarc, load_entity_limits_config, load_ingest_pool_config,
+    load_install_enrichment_config, redact_llm_value, redact_mcp_value, save_entity_limits_config,
+    save_ingest_pool_config, save_install_enrichment_config, save_llm_config,
+    save_public_collect_config, save_sysdiagnose_ingest_config, EntityLimitsConfig, IngestPoolConfig,
     InstallEnrichmentConfig, LlmConfig, PublicCollectConfig, SysdiagnoseIngestConfig,
-    KEY_ENTITY_LIMITS, KEY_INSTALL_ENRICHMENT, KEY_LLM, KEY_MCP, KEY_PUBLIC_COLLECT,
+    KEY_ENTITY_LIMITS, KEY_INGEST_POOL, KEY_INSTALL_ENRICHMENT, KEY_LLM, KEY_MCP, KEY_PUBLIC_COLLECT,
     KEY_SYSDIAGNOSE_INGEST,
 };
 use serde::{Deserialize, Serialize};
@@ -71,6 +72,7 @@ pub fn router() -> Router<AppState> {
         .route("/v1/events/{id}", get(get_event))
         .route("/v1/data/summary", get(data_summary))
         .route("/v1/data/sources/delete", post(delete_ingest_source))
+        .route("/v1/data/sources/archive", post(archive_ingest_source))
         .route("/v1/ingest/jobs", get(list_ingest_jobs))
         .route("/v1/ingest/jobs/{id}", get(get_ingest_job))
         .route("/v1/ingest/reingest/case/{case_id}", post(reingest_case_handler))
@@ -148,6 +150,14 @@ async fn health_detail(
         detail.auth = None;
         detail.integrations.api_keys.by_user = None;
     }
+    let pool = state.ingest_pool.stats();
+    detail.ingest_pool = Some(mobipwn_core::health::IngestPoolHealth {
+        workers: pool.workers,
+        queued: pool.queued,
+        active: pool.active,
+        max_queue: Some(pool.max_queue),
+        saturated: pool.saturated,
+    });
     Ok(Json(detail))
 }
 
@@ -194,6 +204,7 @@ async fn data_summary(
     mobipwn_core::fetch_data_summary(
         &state.pool,
         &state.config,
+        Some(&state.collect_blobs),
         mobipwn_ingest::ingest_build_features(),
     )
         .await
@@ -215,6 +226,23 @@ async fn delete_ingest_source(
         &state.config,
         &state.cases,
         &state.ingest_jobs,
+        &state.collect_blobs,
+        &state.alerts,
+        &body.source,
+    )
+    .await
+    .map(Json)
+    .map_err(|e| api_error(StatusCode::BAD_REQUEST, e.to_string()))
+}
+
+async fn archive_ingest_source(
+    State(state): State<AppState>,
+    Json(body): Json<DeleteIngestSourceRequest>,
+) -> Result<Json<mobipwn_core::ArchiveIngestResponse>, (StatusCode, Json<ApiErrorResponse>)> {
+    mobipwn_core::archive_ingest_source(
+        &state.pool,
+        &state.config,
+        &state.cases,
         &state.collect_blobs,
         &state.alerts,
         &body.source,
@@ -1000,6 +1028,14 @@ async fn get_setting(
             serde_json::to_value(cfg).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
         ));
     }
+    if key == KEY_INGEST_POOL {
+        let cfg = load_ingest_pool_config(&state.settings, &state.config)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        return Ok(Json(
+            serde_json::to_value(cfg).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        ));
+    }
     Ok(Json(value))
 }
 
@@ -1049,6 +1085,19 @@ async fn set_setting(
         save_install_enrichment_config(&state.settings, &incoming)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        return Ok(StatusCode::NO_CONTENT);
+    }
+    if key == KEY_INGEST_POOL {
+        let incoming: IngestPoolConfig =
+            serde_json::from_value(body).map_err(|_| StatusCode::BAD_REQUEST)?;
+        let saved = save_ingest_pool_config(&state.settings, &incoming)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        state.ingest_pool.apply_config(
+            saved.workers as usize,
+            saved.max_queue,
+            saved.effective_insert_chunk_size(),
+        );
         return Ok(StatusCode::NO_CONTENT);
     }
     state

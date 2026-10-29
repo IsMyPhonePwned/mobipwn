@@ -1,4 +1,4 @@
-mod db_stats;
+pub mod db_stats;
 mod docker_stats;
 mod process_stats;
 
@@ -63,6 +63,8 @@ pub struct HealthDetail {
     pub alerting_rules: i64,
     pub failed_rules_24h: i64,
     pub pending_ingest_jobs: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ingest_pool: Option<IngestPoolHealth>,
     pub process: ProcessStats,
     pub crates: Vec<CrateProcessStats>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -71,6 +73,17 @@ pub struct HealthDetail {
     pub integrations: IntegrationsHealth,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub auth: Option<AuthActivity>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct IngestPoolHealth {
+    pub workers: usize,
+    pub queued: usize,
+    pub active: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_queue: Option<u32>,
+    #[serde(default)]
+    pub saturated: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -138,6 +151,7 @@ pub async fn fetch_health_detail(
         alerting_rules,
         failed_rules_24h,
         pending_ingest_jobs,
+        ingest_pool: None,
         process,
         crates,
         docker_containers,

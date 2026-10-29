@@ -214,6 +214,7 @@ pub fn run_sysdiagnose_parsers_with_progress(
     archive: Arc<SysdiagnoseArchive>,
     parsers: Vec<(ParserType, Box<dyn SysdiagnoseParser + Send + Sync>)>,
     on_progress: Option<SysdiagnoseProgressFn>,
+    parser_threads: Option<usize>,
 ) -> Vec<(
     ParserType,
     Result<Value, Box<dyn std::error::Error + Send + Sync>>,
@@ -223,9 +224,12 @@ pub fn run_sysdiagnose_parsers_with_progress(
     let completed = Arc::new(Mutex::new(Vec::<ParserRunSummary>::new()));
     let active = Arc::new(Mutex::new(Vec::<String>::new()));
 
-    let threads = std::env::var("MOBIPWN_SYSDIAGNOSE_PARSER_THREADS")
-        .ok()
-        .and_then(|s| s.parse().ok())
+    let threads = parser_threads
+        .or_else(|| {
+            std::env::var("MOBIPWN_SYSDIAGNOSE_PARSER_THREADS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+        })
         .unwrap_or(2usize)
         .clamp(1, 8);
 

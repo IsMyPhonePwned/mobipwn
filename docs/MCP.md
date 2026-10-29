@@ -73,23 +73,50 @@ Development (debug build):
 }
 ```
 
-## Tools (investigator)
+## Tools
+
+### Search & fields
 
 | Tool | API | Purpose |
 |------|-----|---------|
 | `search_run` | `POST /v1/search/run` | Execute mPL |
 | `search_compile` | `POST /v1/search/compile` | mPL → SQL |
+| `search_histogram` | `POST /v1/search/histogram` | Event counts over time |
 | `mudm_list_fields` | `GET /v1/mudm/fields` | Field catalog |
 | `search_field_stats` | `POST /v1/search/field-stats` | Top field values |
 | `search_fields_in_scope` | `POST /v1/search/fields-in-scope` | Fields in filter |
-| `prevalence_scatter` | `POST /v1/prevalence/scatter` | Rarity / noise reduction in a scope |
-| `overview` | `GET /v1/overview` | Platform snapshot |
-| `cases_list` / `cases_get` / `cases_entities` / `cases_wall` | cases API | Investigation |
-| `cases_patch` / `cases_link_alert` | cases API | Case updates |
-| `alerts_list` / `alerts_get` / `alerts_patch` | alerts API | Triage |
-| `rules_list` / `rules_validate_query` / `rules_create` | rules API | Detections |
-| `saved_queries_list` / `saved_queries_create` | saved queries | Hunt library |
+| `prevalence_scatter` | `POST /v1/prevalence/scatter` | Rarity / noise reduction |
 | `get_event` | `GET /v1/events/{id}` | Single row drill-down |
+
+### Cases & alerts
+
+| Tool | API | Purpose |
+|------|-----|---------|
+| `cases_list` / `cases_get` / `cases_create` | cases API | Investigation cases |
+| `cases_entities` / `cases_wall` / `cases_comment` | cases API | Graph, wall, notes |
+| `cases_patch` / `cases_link_alert` | cases API | Updates / link alerts |
+| `alerts_list` / `alerts_get` / `alerts_patch` | alerts API | Triage |
+| `alerts_groups` | `GET /v1/alerts/groups` | Grouped alert summary |
+
+### Detections & saved hunts
+
+| Tool | API | Purpose |
+|------|-----|---------|
+| `rules_list` / `rules_get` / `rules_create` / `rules_update` | rules API | Detections |
+| `rules_validate_query` / `rules_run` | rules API | Validate / run now |
+| `saved_queries_list` / `saved_queries_create` | saved queries | Hunt library |
+
+### Data, ingest & health
+
+| Tool | API | Purpose |
+|------|-----|---------|
+| `overview` | `GET /v1/overview` | Platform snapshot |
+| `data_summary` | `GET /v1/data/summary` | Sources & event counts |
+| `data_sources_archive` | `POST /v1/data/sources/archive` | Cold-archive (keep blobs) |
+| `data_sources_delete` | `POST /v1/data/sources/delete` | Full delete |
+| `ingest_jobs_list` / `ingest_jobs_get` | ingest jobs API | Job status / progress |
+| `collect_blobs_list` / `collect_blobs_reingest` | collect blobs API | Stored archives / re-ingest |
+| `health_detail` | `GET /v1/health/detail` | DB + ingest pool health |
 | `llm_status` | `GET /v1/llm/status` | Server LLM config (optional) |
 
 ## Resources

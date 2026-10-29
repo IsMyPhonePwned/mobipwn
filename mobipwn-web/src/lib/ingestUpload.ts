@@ -29,6 +29,7 @@ export type IngestUploadOptions = {
     logarchive_decode_max_lines?: number;
     max_entry_mb?: number;
     ioservice_full_tree?: boolean;
+    parser_threads?: number;
   };
   /** Run fakeMustache before parse (pseudonymize identifiers in indexed events). */
   anonymize?: {
@@ -89,11 +90,16 @@ function jobProgressUpdate(job: IngestJobResponse): IngestProgress {
       detail: `${formatBytes(job.bytes_received)} / ${formatBytes(job.file_size)} uploaded`,
     };
   }
+  const stage =
+    job.stage ||
+    (job.status === "pending" ? "queued" : job.status === "running" ? "opening" : undefined);
   return {
-    percent: Math.max(90, job.progress_percent),
+    percent: Math.max(job.status === "pending" ? 88 : 90, job.progress_percent),
     phase: "processing",
-    stage: job.stage,
-    detail: job.stage_detail || undefined,
+    stage,
+    detail:
+      job.stage_detail ||
+      (job.status === "pending" ? "Waiting for an ingest worker…" : undefined),
     parsers: parsers?.length ? parsers : undefined,
     parsersCompleted: job.progress?.parsers_completed,
     parsersTotal: job.progress?.parsers_total,

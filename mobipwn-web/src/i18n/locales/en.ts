@@ -458,8 +458,13 @@ export const en = {
     blobStorageColSource: "Source",
     blobStorageColOrigin: "Origin",
     blobStorageColAnalyzed: "Analyzed",
-    blobStorageAnalyzedYes: "Yes",
-    blobStorageAnalyzedNo: "Pending",
+    blobStorageAnalyzedYes: "In ClickHouse",
+    blobStorageAnalyzedNo: "Archived (blob only)",
+    archiveIngest: "Archive",
+    archiveIngestTitle: "Archive ingest (keep blob)",
+    archiveIngestConfirm:
+      "Remove all ClickHouse events for this source but keep the stored archive blob and case?\n\nYou can re-ingest later from Blob storage or the case page.",
+    archiveIngestDone: "Archived {{source}} — {{events}} events cleared, {{blobs}} blob(s) kept",
     blobStorageColPlatform: "Platform",
     blobStorageColSize: "Size",
     blobStorageColCase: "Case",
@@ -521,6 +526,9 @@ export const en = {
     ioserviceFullTreeLabel: "IOService full tree",
     ioserviceFullTreeHint:
       "When enabled, expand the full IOService tree instead of the compact preview (much larger parser output).",
+    parserThreadsLabel: "Parser threads (1–8)",
+    parserThreadsHint:
+      "Rayon concurrency for sysdiagnose parsers inside one job. Lower reduces peak RAM; raise only with free CPU.",
   },
   installEnrichment: {
     title: "Install enrichment rules",
@@ -802,6 +810,10 @@ export const en = {
     ingestedEvents: "Ingested {{count}} events",
     linkCase: "Case",
     progressTitle: "Ingest progress",
+    elapsed: "Elapsed",
+    queueBadge: "Queued",
+    queuedHint:
+      "Waiting for a free ingest worker. Other archives may be processing first — this starts automatically.",
     readingFile: "Reading file…",
     sendingToApi: "Sending to API…",
     stepHash: "Verify file (SHA-256)",
@@ -948,6 +960,14 @@ export const en = {
     reingestComplete: "Re-ingest finished",
     searchReingestedBadge: "Re-ingested",
     searchReingestedHint: "Re-ingested {{count}} times · last {{when}}",
+    searchArchivedBadge: "Archived",
+    searchArchivedHint:
+      "Cold archive — ClickHouse events cleared; original blob kept for re-ingest",
+    searchArchivedNoEvents: "0 events (archived)",
+    detailArchivedTitle: "Cold-archived ingest",
+    detailArchivedBody:
+      "ClickHouse events for this source were cleared. The stored archive blob is kept — re-ingest to restore searchable data.",
+    detailArchivedReingestCta: "Re-ingest to restore",
     searchLastIngest: "Last ingested {{when}}",
     searchLastReingest: "Last re-ingested {{when}}",
     searchIngestRuns: "{{count}} ingest runs",

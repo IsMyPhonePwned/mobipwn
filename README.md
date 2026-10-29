@@ -490,7 +490,8 @@ When `MOBIPWN_REQUIRE_AUTH=1`, send `X-Api-Key: <key>` or `Authorization: Bearer
 | POST | `/v1/ingest/sysdiagnose?source=case-001&user=alice` | Raw `.tar.gz` sysdiagnose |
 | GET | `/v1/ingest/jobs` | Ingest job status per source |
 | GET | `/v1/data/summary` | Sources, event counts |
-| POST | `/v1/data/sources/delete` | Delete a source’s events |
+| POST | `/v1/data/sources/delete` | Delete a source’s events, cases, jobs, and blobs |
+| POST | `/v1/data/sources/archive` | Cold-archive: clear ClickHouse events/alerts, keep blobs + case for re-ingest |
 
 ### Detection rules
 

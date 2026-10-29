@@ -2,6 +2,7 @@
 
 pub mod alert_siem;
 pub mod alerts;
+pub mod archive_store;
 pub mod case_compare;
 pub mod backup;
 pub mod auth;
@@ -45,7 +46,8 @@ pub use backup::{
     export_backup, import_backup, list_section_info, parse_section_ids, BackupBundle, BackupSection,
     BackupSectionInfo, ImportBackupResult, ImportMode, BACKUP_FORMAT_VERSION,
 };
-pub use config::{app_version, AppConfig};
+pub use archive_store::{delete_archive, materialize_archive, persist_archive};
+pub use config::{app_version, AppConfig, ArchiveBackend, IngestMode};
 pub use case_audit::{
     emit_case_audit, emit_case_comment, fetch_case_wall, normalize_note_type, CaseAuditAction,
     CaseAuditActor, CaseAuditExtras,
@@ -53,9 +55,10 @@ pub use case_audit::{
 };
 pub use cases_list::list_cases_with_ingest;
 pub use data::{
-    clear_ingest_events_for_source, count_events_by_source, delete_ingest_source, fetch_data_summary,
-    rename_ingest_source, ClearIngestEventsResponse, DataSummary, DeleteIngestResponse,
-    RenameIngestSourceResponse, SourceSummary,
+    archive_ingest_source, clear_ingest_events_for_source, count_events_by_source,
+    delete_ingest_source, fetch_data_summary, rename_ingest_source, ArchiveIngestResponse,
+    ClearIngestEventsResponse, DataSummary, DeleteIngestResponse, RenameIngestSourceResponse,
+    SourceSummary,
 };
 pub use db::{run_migrations, DualPool};
 pub use entities::{
@@ -84,22 +87,22 @@ pub use plugins::{
 pub use platform_settings::{
     bootstrap_from_env, default_mcp_config, effective_app_config, is_local_llm_url, is_masked_secret,
     load_entity_limits_config, load_llm_config,
-    load_mcp_config, load_public_collect_config, load_retention_by_source_type, load_search_limits,
-    load_sysdiagnose_ingest_config, load_install_enrichment_config,
+    load_ingest_pool_config, load_mcp_config, load_public_collect_config, load_retention_by_source_type,
+    load_search_limits, load_sysdiagnose_ingest_config, load_install_enrichment_config,
     llm_public, mcp_public, redact_llm_value, redact_mcp_value, save_llm_config, save_mcp_config,
-    save_entity_limits_config, save_sysdiagnose_ingest_config, save_install_enrichment_config,
-    public_collect_is_enabled, save_public_collect_config, AndroidCollectConfig, AndroidYaraRule,
-    EntityLimitsConfig, IosCollectConfig, InstallEnrichmentConfig, InstallEnrichmentNamePattern,
-    InstallEnrichmentRuleConfig, LlmConfig, LlmConfigPublic,
-    McpConfig, McpConfigPublic, prepare_android_collect_config, prepare_sysdiagnose_ingest_config,
-    prepare_install_enrichment_config, prepare_entity_limits_config, public_android_collect_config,
-    public_collector_config, public_ios_collect_config, PublicAndroidCollectConfig,
-    PublicCollectorConfig, PublicCollectConfig, PublicIosCollectConfig, SearchLimitsConfig,
-    SysdiagnoseIngestConfig, SysdiagnoseIngestOverrides, apply_sysdiagnose_ingest_overrides,
-    default_install_enrichment_config,
+    save_entity_limits_config, save_ingest_pool_config, save_sysdiagnose_ingest_config,
+    save_install_enrichment_config, public_collect_is_enabled, save_public_collect_config,
+    AndroidCollectConfig, AndroidYaraRule, EntityLimitsConfig, IngestPoolConfig, IosCollectConfig,
+    InstallEnrichmentConfig, InstallEnrichmentNamePattern, InstallEnrichmentRuleConfig, LlmConfig,
+    LlmConfigPublic, McpConfig, McpConfigPublic, prepare_android_collect_config,
+    prepare_sysdiagnose_ingest_config, prepare_install_enrichment_config, prepare_entity_limits_config,
+    public_android_collect_config, public_collector_config, public_ios_collect_config,
+    PublicAndroidCollectConfig, PublicCollectorConfig, PublicCollectConfig, PublicIosCollectConfig,
+    SearchLimitsConfig, SysdiagnoseIngestConfig, SysdiagnoseIngestOverrides,
+    apply_sysdiagnose_ingest_overrides, default_install_enrichment_config,
     LOGARCHIVE_FORENSIC_MAX_LINES, LOGARCHIVE_UNCAPPED_MIN_ENTRY_MB, MAX_ENTRY_MB_CEILING,
-    KEY_ENTITY_LIMITS, KEY_INSTALL_ENRICHMENT, KEY_LLM, KEY_MCP, KEY_PUBLIC_COLLECT, KEY_RETENTION,
-    KEY_SEARCH_LIMITS, KEY_SYSDIAGNOSE_INGEST,
+    KEY_ENTITY_LIMITS, KEY_INGEST_POOL, KEY_INSTALL_ENRICHMENT, KEY_LLM, KEY_MCP, KEY_PUBLIC_COLLECT,
+    KEY_RETENTION, KEY_SEARCH_LIMITS, KEY_SYSDIAGNOSE_INGEST,
 };
 pub use yara_compile::{compile_yara_source, compile_yara_sources, decode_yarc, encode_yarc};
 pub use mcp_supervisor::{McpStatus, McpSupervisor, resolve_mcp_binary};

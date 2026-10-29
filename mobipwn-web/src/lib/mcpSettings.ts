@@ -51,3 +51,50 @@ export async function stopMcp(): Promise<McpStatus> {
 export async function restartMcp(): Promise<McpStatus> {
   return apiFetch<McpStatus>("/v1/mcp/restart", { method: "POST" });
 }
+
+/** Tool catalog mirrored from `mobipwn-mcp` / docs/MCP.md — keep in sync when adding tools. */
+export const MCP_TOOL_CATALOG: { group: string; tools: { name: string; summary: string }[] }[] = [
+  {
+    group: "Search & fields",
+    tools: [
+      { name: "search_run", summary: "Execute mPL" },
+      { name: "search_compile", summary: "mPL → SQL" },
+      { name: "search_histogram", summary: "Counts over time" },
+      { name: "mudm_list_fields", summary: "Field catalog" },
+      { name: "search_field_stats", summary: "Top field values" },
+      { name: "search_fields_in_scope", summary: "Fields in filter" },
+      { name: "prevalence_scatter", summary: "Rarity / noise cut" },
+      { name: "get_event", summary: "Single event row" },
+    ],
+  },
+  {
+    group: "Cases & alerts",
+    tools: [
+      { name: "cases_list / get / create / patch", summary: "Investigation cases" },
+      { name: "cases_entities / wall / comment", summary: "Graph, wall, notes" },
+      { name: "cases_link_alert", summary: "Link alert to case" },
+      { name: "alerts_list / get / patch", summary: "Triage" },
+      { name: "alerts_groups", summary: "Grouped summary" },
+    ],
+  },
+  {
+    group: "Detections",
+    tools: [
+      { name: "rules_list / get / create / update", summary: "Detection rules" },
+      { name: "rules_validate_query / run", summary: "Validate & run now" },
+      { name: "saved_queries_list / create", summary: "Hunt library" },
+    ],
+  },
+  {
+    group: "Data & ingest",
+    tools: [
+      { name: "overview / data_summary", summary: "Platform & sources" },
+      { name: "data_sources_archive", summary: "Cold-archive (keep blobs)" },
+      { name: "data_sources_delete", summary: "Full source delete" },
+      { name: "ingest_jobs_list / get", summary: "Job progress" },
+      { name: "collect_blobs_list / reingest", summary: "Stored archives" },
+      { name: "health_detail", summary: "DB + ingest pool" },
+      { name: "llm_status", summary: "Server LLM config" },
+    ],
+  },
+];

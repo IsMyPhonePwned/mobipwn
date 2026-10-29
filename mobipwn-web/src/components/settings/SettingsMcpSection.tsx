@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useActivityLog } from "@/contexts/ActivityLogContext";
 import {
   fetchMcpConfig,
   fetchMcpStatus,
+  MCP_TOOL_CATALOG,
   restartMcp,
   saveMcpConfig,
   startMcp,
@@ -177,6 +179,33 @@ export function SettingsMcpSection() {
           </pre>
         </div>
       )}
+
+      <div className="settings-panel__block">
+        <h3 className="settings-panel__subhead">Exposed tools</h3>
+        <p className="muted text-xs">
+          Tools provided by <code className="mono">mobipwn-mcp</code> once the process is running.
+          Full reference:{" "}
+          <Link to="/guide/agents" className="underline">
+            Agents guide
+          </Link>{" "}
+          / <code className="mono">docs/MCP.md</code>.
+        </p>
+        <div className="settings-mcp-tools">
+          {MCP_TOOL_CATALOG.map((group) => (
+            <div key={group.group} className="settings-mcp-tools__group">
+              <h4 className="settings-mcp-tools__title">{group.group}</h4>
+              <ul className="settings-mcp-tools__list">
+                {group.tools.map((t) => (
+                  <li key={t.name}>
+                    <code className="mono">{t.name}</code>
+                    <span className="muted text-xs">{t.summary}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
     </section>
   );
 }

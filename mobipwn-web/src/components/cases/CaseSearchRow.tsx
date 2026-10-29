@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   AlertTriangle,
+  Archive,
   Bell,
   Copy,
   Database,
@@ -24,6 +25,7 @@ import {
   caseFirstIngestAt,
   caseHasDistinctLastIngest,
   caseIngestSource,
+  caseIsArchived,
   caseOriginQuickLink,
   caseWasReingested,
   displayCaseTags,
@@ -100,6 +102,7 @@ export function CaseSearchRow({
   const lastIngestRel = lastIngestIso ? formatRelativeCompact(lastIngestIso) : "";
   const lastIngestAbs = lastIngestIso ? formatWallTimestamp(lastIngestIso) : "";
   const reingested = caseWasReingested(caseRec);
+  const archived = caseIsArchived(caseRec);
   const ingestRuns = caseRec.ingest_run_count ?? 0;
   const showLastIngest = caseHasDistinctLastIngest(caseRec);
   const isEditingOwner = editingUser?.id === caseRec.id;
@@ -125,9 +128,19 @@ export function CaseSearchRow({
   }
 
   return (
-    <article className={`case-search-row case-search-row--${origin}${reingested ? " case-search-row--reingested" : ""}`}>
+    <article
+      className={[
+        "case-search-row",
+        `case-search-row--${origin}`,
+        reingested && !archived ? "case-search-row--reingested" : "",
+        archived ? "case-search-row--archived" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      data-archived={archived ? "true" : undefined}
+    >
       <div className={`case-search-row__icon case-search-row__icon--${platform ?? origin}`} aria-hidden>
-        <OriginIcon origin={origin} platform={platform} />
+        {archived ? <Archive size={16} /> : <OriginIcon origin={origin} platform={platform} />}
       </div>
 
       <div className="case-search-row__main">
@@ -139,6 +152,11 @@ export function CaseSearchRow({
             {caseRec.ingest_source && caseRec.ingest_source !== caseRec.title && (
               <p className="case-search-row__subtitle muted text-xs">
                 Case title · ingest source <code className="mono">{source}</code>
+              </p>
+            )}
+            {archived && (
+              <p className="case-search-row__subtitle muted text-xs">
+                {t("cases.searchArchivedHint")}
               </p>
             )}
           </div>
@@ -158,7 +176,16 @@ export function CaseSearchRow({
             ) : (
               <Badge>{caseRec.priority}</Badge>
             )}
-            {reingested ? (
+            {archived ? (
+              <span
+                className="case-search-row__archived"
+                title={t("cases.searchArchivedHint")}
+              >
+                <Archive size={11} aria-hidden />
+                {t("cases.searchArchivedBadge")}
+              </span>
+            ) : null}
+            {reingested && !archived ? (
               <span
                 className="case-search-row__reingest"
                 title={
@@ -188,14 +215,16 @@ export function CaseSearchRow({
           {caseRec.event_count != null && (
             <span className="case-search-row__metric">
               <Database size={12} aria-hidden />
-              {caseRec.event_count.toLocaleString()} events
+              {archived && caseRec.event_count === 0
+                ? t("cases.searchArchivedNoEvents")
+                : `${caseRec.event_count.toLocaleString()} events`}
             </span>
           )}
           <span className={`case-search-row__metric${caseRec.alert_count > 0 ? " case-search-row__metric--alert" : ""}`}>
             <Bell size={12} aria-hidden />
             {caseRec.alert_count} alert{caseRec.alert_count === 1 ? "" : "s"}
           </span>
-          {caseRec.alert_count > 0 && (
+          {caseRec.alert_count > 0 && !archived && (
             <span className="case-search-row__metric case-search-row__metric--warn">
               <AlertTriangle size={12} aria-hidden />
               Needs review

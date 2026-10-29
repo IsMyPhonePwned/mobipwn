@@ -4,8 +4,27 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use crate::collect_blob::{delete_collect_blob_file, persist_collect_blob};
+use crate::archive_store::{delete_archive, persist_archive};
+use crate::config::AppConfig;
 use std::path::Path;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SourceBlobStats {
+    pub blob_count: u64,
+    pub blob_bytes: u64,
+    pub analyzed_count: u64,
+    pub cold_count: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct BlobStorageAggregate {
+    pub blob_count: u64,
+    pub total_bytes: u64,
+    pub analyzed_count: u64,
+    pub cold_count: u64,
+    #[serde(skip)]
+    pub by_source: HashMap<String, SourceBlobStats>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CollectBlob {
@@ -149,15 +168,20 @@ impl CollectBlobRepository {
         Ok(rows.into_iter().map(row_to_blob).collect())
     }
 
-    /// Delete every collect blob for `source` except `keep_id` (disk + row).
-    pub async fn delete_others_for_source(&self, source: &str, keep_id: Uuid) -> anyhow::Result<u64> {
+    /// Delete every collect blob for `source` except `keep_id` (disk/object + row).
+    pub async fn delete_others_for_source(
+        &self,
+        config: &AppConfig,
+        source: &str,
+        keep_id: Uuid,
+    ) -> anyhow::Result<u64> {
         let blobs = self.list(Some(source), 10_000).await?;
         let mut count = 0u64;
         for blob in blobs {
             if blob.id == keep_id {
                 continue;
             }
-            if self.delete(blob.id).await? {
+            if self.delete(config, blob.id).await? {
                 count += 1;
             }
         }
@@ -165,23 +189,28 @@ impl CollectBlobRepository {
     }
 
     /// Keep only the newest archive for `source` (one blob per case ingest source).
-    pub async fn retain_latest_for_source(&self, source: &str) -> anyhow::Result<Option<CollectBlob>> {
+    pub async fn retain_latest_for_source(
+        &self,
+        config: &AppConfig,
+        source: &str,
+    ) -> anyhow::Result<Option<CollectBlob>> {
         let mut blobs = self.list(Some(source), 10_000).await?;
         let Some(latest) = blobs.first().cloned() else {
             return Ok(None);
         };
         for old in blobs.drain(1..) {
-            let _ = self.delete(old.id).await;
+            let _ = self.delete(config, old.id).await;
         }
         Ok(Some(latest))
     }
 
     pub async fn insert_from_file(
         &self,
+        config: &AppConfig,
         archive_path: &Path,
         meta: NewCollectBlob,
     ) -> anyhow::Result<CollectBlob> {
-        let (id, storage_path) = persist_collect_blob(archive_path, &meta.file_name)?;
+        let (id, storage_path) = persist_archive(config, archive_path, &meta.file_name).await?;
         let row = sqlx::query_as::<_, BlobRow>(
             "INSERT INTO collect_blobs \
              (id, ingest_job_id, source, platform, file_name, file_hash, file_size, storage_path, case_user, ingest_tags, origin, analyzed) \
@@ -196,7 +225,7 @@ impl CollectBlobRepository {
         .bind(&meta.file_name)
         .bind(&meta.file_hash)
         .bind(meta.file_size)
-        .bind(storage_path.to_string_lossy().as_ref())
+        .bind(&storage_path)
         .bind(&meta.case_user)
         .bind(&meta.ingest_tags)
         .bind(&meta.origin)
@@ -205,7 +234,9 @@ impl CollectBlobRepository {
         .await?;
         let mut blob = row_to_blob(row);
         // One archive per ingest source / case — replace any older copies.
-        let _ = self.delete_others_for_source(&blob.source, blob.id).await;
+        let _ = self
+            .delete_others_for_source(config, &blob.source, blob.id)
+            .await;
         if let Some(full) = self.get(blob.id).await? {
             blob.case_id = full.case_id;
             blob.case_title = full.case_title;
@@ -221,11 +252,77 @@ impl CollectBlobRepository {
         Ok(r.rows_affected() > 0)
     }
 
-    pub async fn delete(&self, id: Uuid) -> anyhow::Result<bool> {
+    /// Mark all blobs for a source as analyzed (hot) or cold (events archived out of ClickHouse).
+    pub async fn set_analyzed_for_source(&self, source: &str, analyzed: bool) -> anyhow::Result<u64> {
+        let r = sqlx::query("UPDATE collect_blobs SET analyzed = $2 WHERE source = $1")
+            .bind(source)
+            .bind(analyzed)
+            .execute(&self.pool)
+            .await?;
+        Ok(r.rows_affected())
+    }
+
+    pub async fn count_for_source(&self, source: &str) -> anyhow::Result<i64> {
+        let (n,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*)::bigint FROM collect_blobs WHERE source = $1")
+                .bind(source)
+                .fetch_one(&self.pool)
+                .await?;
+        Ok(n)
+    }
+
+    /// Aggregate blob counts/sizes per source (and overall totals).
+    pub async fn storage_stats_by_source(&self) -> anyhow::Result<BlobStorageAggregate> {
+        let rows: Vec<(String, i64, i64, i64, i64)> = sqlx::query_as(
+            "SELECT source, \
+                    COUNT(*)::bigint, \
+                    COALESCE(SUM(file_size), 0)::bigint, \
+                    COUNT(*) FILTER (WHERE analyzed)::bigint, \
+                    COUNT(*) FILTER (WHERE NOT analyzed)::bigint \
+             FROM collect_blobs \
+             GROUP BY source \
+             ORDER BY SUM(file_size) DESC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut by_source = HashMap::new();
+        let mut blob_count = 0i64;
+        let mut total_bytes = 0i64;
+        let mut analyzed_count = 0i64;
+        let mut cold_count = 0i64;
+        for (source, count, bytes, analyzed, cold) in rows {
+            blob_count += count;
+            total_bytes += bytes;
+            analyzed_count += analyzed;
+            cold_count += cold;
+            by_source.insert(
+                source,
+                SourceBlobStats {
+                    blob_count: count.max(0) as u64,
+                    blob_bytes: bytes.max(0) as u64,
+                    analyzed_count: analyzed.max(0) as u64,
+                    cold_count: cold.max(0) as u64,
+                },
+            );
+        }
+
+        Ok(BlobStorageAggregate {
+            blob_count: blob_count.max(0) as u64,
+            total_bytes: total_bytes.max(0) as u64,
+            analyzed_count: analyzed_count.max(0) as u64,
+            cold_count: cold_count.max(0) as u64,
+            by_source,
+        })
+    }
+
+    pub async fn delete(&self, config: &AppConfig, id: Uuid) -> anyhow::Result<bool> {
         let Some(blob) = self.get(id).await? else {
             return Ok(false);
         };
-        delete_collect_blob_file(&blob.storage_path)?;
+        if let Err(e) = delete_archive(config, &blob.storage_path).await {
+            tracing::warn!(error = %e, path = %blob.storage_path, "failed to delete collect archive object");
+        }
         let r = sqlx::query("DELETE FROM collect_blobs WHERE id = $1")
             .bind(id)
             .execute(&self.pool)
@@ -233,11 +330,11 @@ impl CollectBlobRepository {
         Ok(r.rows_affected() > 0)
     }
 
-    pub async fn delete_by_source(&self, source: &str) -> anyhow::Result<u64> {
+    pub async fn delete_by_source(&self, config: &AppConfig, source: &str) -> anyhow::Result<u64> {
         let blobs = self.list(Some(source), 10_000).await?;
         let mut count = 0u64;
         for blob in blobs {
-            if self.delete(blob.id).await? {
+            if self.delete(config, blob.id).await? {
                 count += 1;
             }
         }

@@ -499,6 +499,7 @@ mod tests {
             },
             require_auth: false,
             expose_dev_logs: false,
+            ingest_workers: 2,
         }
     }
 

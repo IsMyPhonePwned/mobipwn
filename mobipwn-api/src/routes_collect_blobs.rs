@@ -99,7 +99,10 @@ async fn list_collect_blobs(
     let limit = q.limit.clamp(1, 500);
     // Case / source-scoped lists: one archive per source (drop older duplicates).
     if let Some(src) = q.source.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-        let _ = state.collect_blobs.retain_latest_for_source(src).await;
+        let _ = state
+            .collect_blobs
+            .retain_latest_for_source(&state.config, src)
+            .await;
     }
     let blobs = state
         .collect_blobs
@@ -133,9 +136,15 @@ async fn download_collect_blob(
         .map_err(|e| api_error(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or_else(|| api_error(StatusCode::NOT_FOUND, "collect archive not found"))?;
 
-    let bytes = tokio::fs::read(&blob.storage_path)
+    let (local_path, cleanup) = mobipwn_core::materialize_archive(&state.config, &blob.storage_path)
+        .await
+        .map_err(|e| api_error(StatusCode::NOT_FOUND, format!("archive unavailable: {e}")))?;
+    let bytes = tokio::fs::read(&local_path)
         .await
         .map_err(|e| api_error(StatusCode::NOT_FOUND, format!("archive file unreadable: {e}")))?;
+    if cleanup {
+        let _ = tokio::fs::remove_file(&local_path).await;
+    }
 
     let disposition = format!(
         "attachment; filename=\"{}\"",
@@ -177,7 +186,7 @@ async fn delete_collect_blob(
 ) -> Result<StatusCode, (StatusCode, Json<ApiErrorResponse>)> {
     let deleted = state
         .collect_blobs
-        .delete(id)
+        .delete(&state.config, id)
         .await
         .map_err(|e| api_error(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     if deleted {

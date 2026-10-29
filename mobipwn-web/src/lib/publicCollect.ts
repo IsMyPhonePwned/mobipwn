@@ -52,6 +52,7 @@ export async function uploadPublicCollect(params: {
     logarchive_decode_max_lines?: number;
     max_entry_mb?: number;
     ioservice_full_tree?: boolean;
+    parser_threads?: number;
   };
 }): Promise<PublicCollectIngestResponse> {
   const url = new URL("/api/v1/public/collect/ingest", window.location.origin);

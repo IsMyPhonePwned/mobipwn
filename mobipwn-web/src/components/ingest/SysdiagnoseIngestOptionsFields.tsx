@@ -103,6 +103,25 @@ export function SysdiagnoseIngestOptionsFields({
           <p className="muted text-xs">{label("ioserviceFullTreeHint")}</p>
         </div>
       </label>
+
+      <label className="settings-field">
+        <span className="settings-field__label">{label("parserThreadsLabel")}</span>
+        <input
+          type="number"
+          min={1}
+          max={8}
+          step={1}
+          disabled={disabled}
+          value={config.parser_threads ?? 2}
+          onChange={(e) =>
+            onChange({
+              ...config,
+              parser_threads: Math.min(Math.max(Number(e.target.value) || 2, 1), 8),
+            })
+          }
+        />
+        <span className="muted text-xs">{label("parserThreadsHint")}</span>
+      </label>
     </>
   );
 }

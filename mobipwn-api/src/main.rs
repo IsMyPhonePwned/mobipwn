@@ -4,6 +4,7 @@ mod auth;
 mod case_audit;
 mod effective_config;
 mod ingest;
+mod ingest_pool;
 mod detection_hook;
 mod routes;
 mod routes_extended;
@@ -73,6 +74,7 @@ pub struct AppState {
     pub dashboards: Arc<DashboardRepository>,
     pub suppressions: Arc<SuppressionRepository>,
     pub mcp: Arc<McpSupervisor>,
+    pub ingest_pool: ingest_pool::IngestWorkerPool,
 }
 
 #[tokio::main]
@@ -125,6 +127,14 @@ async fn main() -> anyhow::Result<()> {
     bootstrap_from_env(&settings, &config).await?;
 
     let mcp = Arc::new(McpSupervisor::new(config.clone(), settings.clone()));
+    let pool_cfg = mobipwn_core::load_ingest_pool_config(&settings, &config)
+        .await
+        .unwrap_or_else(|_| mobipwn_core::IngestPoolConfig::from_env_config(&config));
+    let ingest_pool = ingest_pool::IngestWorkerPool::new(
+        pool_cfg.workers as usize,
+        pool_cfg.max_queue,
+        pool_cfg.effective_insert_chunk_size(),
+    );
 
     let pg = pool.postgres.clone();
     let state = AppState {
@@ -149,7 +159,30 @@ async fn main() -> anyhow::Result<()> {
         suppressions: Arc::new(SuppressionRepository::new(pg.clone())),
         settings: settings.clone(),
         mcp: mcp.clone(),
+        ingest_pool: ingest_pool.clone(),
     };
+
+    if config.ingest_mode.runs_workers() {
+        state.ingest_pool.spawn_workers(state.clone());
+        state.ingest_pool.recover_interrupted(&state).await;
+    } else {
+        tracing::info!(
+            mode = ?config.ingest_mode,
+            "ingest workers disabled in this process (api-only); pending jobs need a worker"
+        );
+    }
+
+    if config.ingest_mode == mobipwn_core::IngestMode::Worker {
+        // Dedicated ingest worker: health only (no full API surface).
+        let public = Router::new()
+            .route("/health", axum::routing::get(routes::health))
+            .with_state(state.clone());
+        let addr: SocketAddr = config.api_bind.parse()?;
+        tracing::info!(%addr, "mobipwn-ingest-worker health listening");
+        let listener = tokio::net::TcpListener::bind(addr).await?;
+        axum::serve(listener, public).await?;
+        return Ok(());
+    }
 
     if let Err(e) = mcp.auto_start_if_configured().await {
         tracing::warn!(error = %e, "mobipwn-mcp auto_start skipped");
@@ -194,7 +227,7 @@ async fn main() -> anyhow::Result<()> {
         .layer(CorsLayer::permissive());
 
     let addr: SocketAddr = config.api_bind.parse()?;
-    tracing::info!(%addr, "mobipwn-api listening");
+    tracing::info!(%addr, mode = ?config.ingest_mode, "mobipwn-api listening");
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
     Ok(())

@@ -113,8 +113,19 @@ services:
       MOBIPWN_CLICKHOUSE_URL: http://clickhouse:8123
       MOBIPWN_API_BIND: 0.0.0.0:3000
       MOBIPWN_COLLECT_BLOB_DIR: /data/collect-blobs
+      MOBIPWN_UPLOAD_DIR: /data/uploads
+      # both | api-only | worker — set api-only when starting profile `ingest-worker`
+      MOBIPWN_INGEST_MODE: ${MOBIPWN_INGEST_MODE:-both}
+      MOBIPWN_ARCHIVE_BACKEND: ${MOBIPWN_ARCHIVE_BACKEND:-local}
+      MOBIPWN_S3_BUCKET: ${MOBIPWN_S3_BUCKET:-}
+      MOBIPWN_S3_ENDPOINT: ${MOBIPWN_S3_ENDPOINT:-}
+      MOBIPWN_S3_REGION: ${MOBIPWN_S3_REGION:-us-east-1}
+      MOBIPWN_S3_PREFIX: ${MOBIPWN_S3_PREFIX:-collect-blobs}
+      MOBIPWN_S3_ACCESS_KEY: ${MOBIPWN_S3_ACCESS_KEY:-}
+      MOBIPWN_S3_SECRET_KEY: ${MOBIPWN_S3_SECRET_KEY:-}
     volumes:
       - collect_blobs:/data/collect-blobs
+      - ingest_uploads:/data/uploads
     ports:
       - "${MOBIPWN_API_PORT:-3000}:3000"
     depends_on:
@@ -122,6 +133,43 @@ services:
         condition: service_healthy
       clickhouse:
         condition: service_healthy
+    restart: unless-stopped
+
+  # Optional dedicated ingest workers (shared Postgres claim + upload/blob volumes).
+  # Start with: MOBIPWN_INGEST_MODE=api-only ./compose.sh --profile ingest-worker up -d
+  mobipwn-ingest-worker:
+    profiles: ["ingest-worker"]
+    build:
+      <<: *rust-build
+      target: mobipwn-api
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *mobipwn-env
+      MOBIPWN_POSTGRES_URL: postgres://mobipwn:mobipwn@postgres:5432/mobipwn
+      MOBIPWN_CLICKHOUSE_URL: http://clickhouse:8123
+      MOBIPWN_API_BIND: 0.0.0.0:3000
+      MOBIPWN_INGEST_MODE: worker
+      MOBIPWN_COLLECT_BLOB_DIR: /data/collect-blobs
+      MOBIPWN_UPLOAD_DIR: /data/uploads
+      MOBIPWN_ARCHIVE_BACKEND: ${MOBIPWN_ARCHIVE_BACKEND:-local}
+      MOBIPWN_S3_BUCKET: ${MOBIPWN_S3_BUCKET:-}
+      MOBIPWN_S3_ENDPOINT: ${MOBIPWN_S3_ENDPOINT:-}
+      MOBIPWN_S3_REGION: ${MOBIPWN_S3_REGION:-us-east-1}
+      MOBIPWN_S3_PREFIX: ${MOBIPWN_S3_PREFIX:-collect-blobs}
+      MOBIPWN_S3_ACCESS_KEY: ${MOBIPWN_S3_ACCESS_KEY:-}
+      MOBIPWN_S3_SECRET_KEY: ${MOBIPWN_S3_SECRET_KEY:-}
+    volumes:
+      - collect_blobs:/data/collect-blobs
+      - ingest_uploads:/data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      mobipwn-api:
+        condition: service_started
     restart: unless-stopped
 
   mobipwn-jobs:
@@ -207,3 +255,4 @@ volumes:
   pgdata:
   chdata:
   collect_blobs:
+  ingest_uploads:

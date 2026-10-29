@@ -44,7 +44,9 @@ pub use rule_organization::{
 };
 pub use rule_versions::{query_diff, rule_diff, RuleVersion, RuleVersionRepository};
 pub use rules::{RuleListFilter, RuleRepository};
-pub use collect_blobs::{CollectBlob, CollectBlobRepository, NewCollectBlob};
+pub use collect_blobs::{
+    BlobStorageAggregate, CollectBlob, CollectBlobRepository, NewCollectBlob, SourceBlobStats,
+};
 pub use cases::{case_ingest_label, CaseRecord, CaseRepository, CreateCase, UpdateCase};
 pub use dashboards::{Dashboard, DashboardRepository};
 pub use saved_queries::{SavedQueriesBundle, SavedQuery, SavedQueryRepository};

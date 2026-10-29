@@ -142,6 +142,10 @@ export default function IngestPage() {
             typeof body.max_entry_mb === "number"
               ? body.max_entry_mb
               : DEFAULT_SYSDIAGNOSE_INGEST_CONFIG.max_entry_mb,
+          parser_threads:
+            typeof body.parser_threads === "number"
+              ? body.parser_threads
+              : DEFAULT_SYSDIAGNOSE_INGEST_CONFIG.parser_threads,
         });
       })
       .catch(() => {});
@@ -265,6 +269,7 @@ export default function IngestPage() {
                 logarchive_decode_max_lines: sysdiagnoseOpts.logarchive_decode_max_lines,
                 max_entry_mb: sysdiagnoseOpts.max_entry_mb,
                 ioservice_full_tree: sysdiagnoseOpts.ioservice_full_tree,
+                parser_threads: sysdiagnoseOpts.parser_threads,
               }
             : undefined,
         anonymize: anonEnabled
